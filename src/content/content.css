@@ -1,0 +1,300 @@
+/* Rendering hints for live answer rows. The script only adds these classes to
+ * .Question-mainColumn answer List-item nodes it has positively identified. */
+.zhihu-smoother-answer {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 640px;
+}
+
+/* Parked rows retain the measured block height but no answer subtree. */
+.zhihu-smoother-placeholder {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  contain: strict;
+  contain-intrinsic-size: 0 640px;
+  overflow-anchor: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Small, self-contained performance receipt. All selectors are namespaced so
+ * the page widget cannot alter Zhihu's shared component classes. */
+.zhihu-smoother-page-widget {
+  position: fixed;
+  right: var(--zhihu-smoother-right, 18px);
+  bottom: var(--zhihu-smoother-bottom, 18px);
+  z-index: 2147483000;
+  width: 230px;
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
+  border: 1px solid rgba(29, 34, 41, 0.16);
+  border-radius: 3px;
+  background: #f6f1e7;
+  color: #1d2229;
+  box-shadow: 0 9px 28px rgba(29, 34, 41, 0.16);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.35;
+  pointer-events: auto;
+  opacity: 1;
+  transition: opacity 160ms ease, transform 160ms ease, width 160ms ease;
+}
+
+.zhihu-smoother-page-widget[hidden],
+.zhihu-smoother-page-widget[data-zhihu-smoother-hidden="true"] {
+  display: none;
+}
+
+.zhihu-smoother-page-widget[data-expanded="false"] {
+  width: 150px;
+  height: 44px;
+  overflow: hidden;
+}
+
+.zhihu-smoother-page-widget[data-expanded="true"] {
+  width: 230px;
+  max-height: calc(100vh - var(--zhihu-smoother-bottom, 18px) - 12px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.zhihu-smoother-widget__toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 17px 17px;
+  align-items: center;
+  width: 100%;
+  min-height: 42px;
+  margin: 0;
+  padding: 4px 11px;
+  border: 0;
+  background: transparent;
+  color: #1d2229;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.zhihu-smoother-widget__toggle:focus-visible {
+  outline: 2px solid #0084ff;
+  outline-offset: -3px;
+}
+
+.zhihu-smoother-widget__toggle::after {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid #1d2229;
+  border-bottom: 1.5px solid #1d2229;
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform 160ms ease;
+  content: "";
+}
+
+.zhihu-smoother-page-widget[data-expanded="true"] .zhihu-smoother-widget__toggle::after {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.zhihu-smoother-widget__title {
+  grid-column: 1;
+  grid-row: 1;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zhihu-smoother-widget__summary {
+  display: flex;
+  grid-column: 1;
+  grid-row: 2;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.zhihu-smoother-widget__summary-metric {
+  color: #1d2229;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  line-height: 17px;
+}
+
+.zhihu-smoother-widget__summary-label {
+  overflow: hidden;
+  color: #5d6670;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zhihu-smoother-widget__status-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0084ff;
+}
+
+.zhihu-smoother-page-widget.is-paused .zhihu-smoother-widget__status-dot {
+  background: #5d6670;
+}
+
+.zhihu-smoother-widget__details {
+  display: none;
+  padding: 0 17px 15px;
+}
+
+.zhihu-smoother-page-widget[data-expanded="true"] .zhihu-smoother-widget__details {
+  display: block;
+}
+
+.zhihu-smoother-widget__live-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.zhihu-smoother-widget__eyebrow {
+  margin: 0 0 5px;
+  color: #0084ff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.zhihu-smoother-widget__heading {
+  margin: 0;
+  color: #1d2229;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.zhihu-smoother-widget__state-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 0 12px;
+  font-size: 12px;
+}
+
+.zhihu-smoother-widget__state {
+  color: #0084ff;
+  font-weight: 700;
+}
+
+.zhihu-smoother-page-widget.is-paused .zhihu-smoother-widget__state {
+  color: #5d6670;
+}
+
+.zhihu-smoother-widget__state-note {
+  overflow: hidden;
+  color: #5d6670;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zhihu-smoother-widget__meter {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.zhihu-smoother-widget__ratio {
+  flex: 0 0 auto;
+  color: #1d2229;
+  font-size: 29px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.zhihu-smoother-widget__ratio-label {
+  padding-bottom: 2px;
+  color: #5d6670;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.zhihu-smoother-widget__progress {
+  display: block;
+  width: 100%;
+  height: 5px;
+  margin: 0 0 13px;
+  border: 0;
+  border-radius: 0;
+  background: rgba(29, 34, 41, 0.11);
+  accent-color: #0084ff;
+}
+
+.zhihu-smoother-widget__progress::-webkit-progress-bar {
+  background: rgba(29, 34, 41, 0.11);
+}
+
+.zhihu-smoother-widget__progress::-webkit-progress-value {
+  background: #0084ff;
+}
+
+.zhihu-smoother-widget__progress::-moz-progress-bar {
+  background: #0084ff;
+}
+
+.zhihu-smoother-widget__stats {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 10px;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(29, 34, 41, 0.14);
+}
+
+.zhihu-smoother-widget__label,
+.zhihu-smoother-widget__value {
+  margin: 0;
+  font-size: 11px;
+}
+
+.zhihu-smoother-widget__label {
+  color: #5d6670;
+}
+
+.zhihu-smoother-widget__value {
+  color: #1d2229;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+@media (max-width: 520px) {
+  .zhihu-smoother-page-widget {
+    width: min(230px, calc(100vw - 20px));
+  }
+
+  .zhihu-smoother-page-widget[data-expanded="false"] {
+    width: min(150px, calc(100vw - 20px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zhihu-smoother-page-widget {
+    transition: none;
+  }
+
+  .zhihu-smoother-widget__toggle::after {
+    transition: none;
+  }
+}

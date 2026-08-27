@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知乎顺滑器</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="masthead">
+        <p class="eyebrow">阅读性能 <span aria-hidden="true">/</span> 01</p>
+        <h1>知乎顺滑器</h1>
+        <p class="intro">只优化长回答页，让阅读回到内容本身。</p>
+      </header>
+
+      <section class="panel settings-panel" aria-labelledby="enabled-title">
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h2 id="enabled-title">当前优化</h2>
+            <p id="toggle-hint">在知乎回答页启用流畅加载</p>
+          </div>
+          <label class="toggle-control">
+            <input id="enabled-toggle" type="checkbox" checked aria-describedby="toggle-hint">
+            <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+            <span class="sr-only">启用知乎顺滑器</span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h2 id="widget-title">页面悬浮窗</h2>
+            <p id="widget-toggle-hint">在知乎页展示实时优化效果</p>
+          </div>
+          <label class="toggle-control">
+            <input id="show-page-widget-toggle" type="checkbox" checked aria-describedby="widget-toggle-hint">
+            <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+            <span class="sr-only">显示页面悬浮窗</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel buffer-panel" aria-labelledby="buffer-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="buffer-title">暂存视口</h2>
+            <p>预留回答窗口，越大越稳妥</p>
+          </div>
+          <output id="buffer-value" class="value-mark" for="buffer-2 buffer-4 buffer-6">均衡 · 4</output>
+        </div>
+
+        <fieldset class="buffer-options">
+          <legend class="sr-only">选择暂存视口数量</legend>
+          <label class="buffer-option">
+            <input id="buffer-2" type="radio" name="bufferViewports" value="2">
+            <span class="option-face"><strong>精简</strong><small>2 个视口</small></span>
+          </label>
+          <label class="buffer-option">
+            <input id="buffer-4" type="radio" name="bufferViewports" value="4" checked>
+            <span class="option-face"><strong>均衡</strong><small>4 个视口</small></span>
+          </label>
+          <label class="buffer-option">
+            <input id="buffer-6" type="radio" name="bufferViewports" value="6">
+            <span class="option-face"><strong>稳妥</strong><small>6 个视口</small></span>
+          </label>
+        </fieldset>
+      </section>
+
+      <section class="status-card" aria-labelledby="status-title" aria-live="polite">
+        <div class="status-heading">
+          <div class="status-label">
+            <span id="status-dot" class="status-dot" aria-hidden="true"></span>
+            <h2 id="status-title">正在等待知乎回答页</h2>
+          </div>
+          <span id="status-rule" class="status-rule">待机</span>
+        </div>
+        <p id="stats-text" class="stats-text">仅在知乎长回答页工作</p>
+        <dl class="stat-grid" aria-label="当前页面数据">
+          <div>
+            <dt>回答总数</dt>
+            <dd id="total-answers">—</dd>
+          </div>
+          <div>
+            <dt>已暂存</dt>
+            <dd id="parked-answers">—</dd>
+          </div>
+          <div>
+            <dt>当前可见</dt>
+            <dd id="live-answers">—</dd>
+          </div>
+        </dl>
+      </section>
+
+      <button id="restore-button" class="restore-button" type="button" disabled>
+        恢复本页全部回答
+      </button>
+      <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
