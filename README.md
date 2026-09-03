@@ -25,12 +25,12 @@
 ### 快速安装（开发者模式）
 1. 获取项目代码（任选一种）：
    - **Git 方式**：运行 `git clone https://github.com/wayneCui628/smoother-zhihu.git`
-   - **直接下载**：点击页面右上角绿色 **「Code」** 按钮 -> **「Download ZIP」**，下载后解压到本地；
+   - **直接下载**：点击页面右上角绿色 **Code** 按钮 -> **Download ZIP**，下载后解压到本地；
 2. 打开 Chromium 内核浏览器扩展管理页面：
    - **Chrome**: 地址栏输入 `chrome://extensions`
    - **Edge**: 地址栏输入 `edge://extensions`
-3. 开启**「开发者模式」**（Chrome 位于页面右上角开关，Edge 位于左侧菜单栏底部）；
-4. 点击**「加载已解压的扩展程序」**（Load unpacked），选择本项目包含 `manifest.json` 的解压根目录；
+3. 开启 **开发者模式**（Chrome 位于页面右上角开关，Edge 位于左侧菜单栏底部）；
+4. 点击 **加载已解压的扩展程序** (Load unpacked)，选择本项目包含 `manifest.json` 的解压根目录；
 5. 打开任意回答数量较多的知乎问题页（如 50+ 回答），尽情享受丝滑滚动体验！
 
 ---
