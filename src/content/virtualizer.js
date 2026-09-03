@@ -18,7 +18,7 @@
 
   const DEFAULT_CONFIG = Object.freeze({
     enabled: true,
-    bufferViewports: 4,
+    bufferViewports: 2,
     minAnswers: 5,
     showPageWidget: true,
   });

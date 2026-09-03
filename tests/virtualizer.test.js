@@ -354,7 +354,7 @@ class FakeResizeObserver {
 test("normalizeConfig applies defaults, types, and safe bounds", () => {
   assert.deepEqual(normalizeConfig(), {
     enabled: true,
-    bufferViewports: 4,
+    bufferViewports: 2,
     minAnswers: 5,
     showPageWidget: true,
   });
@@ -379,9 +379,9 @@ test("normalizeConfig applies defaults, types, and safe bounds", () => {
   assert.equal(normalizeConfig({ minAnswers: false }).minAnswers, 5);
   assert.equal(normalizeConfig({ minAnswers: [] }).minAnswers, 5);
   assert.equal(normalizeConfig({ minAnswers: "   " }).minAnswers, 5);
-  assert.equal(normalizeConfig({ bufferViewports: null }).bufferViewports, 4);
-  assert.equal(normalizeConfig({ bufferViewports: "" }).bufferViewports, 4);
-  assert.equal(normalizeConfig({ bufferViewports: "   " }).bufferViewports, 4);
+  assert.equal(normalizeConfig({ bufferViewports: null }).bufferViewports, 2);
+  assert.equal(normalizeConfig({ bufferViewports: "" }).bufferViewports, 2);
+  assert.equal(normalizeConfig({ bufferViewports: "   " }).bufferViewports, 2);
 });
 
 test("findAnswerItems recognizes answers and excludes comment rows", () => {

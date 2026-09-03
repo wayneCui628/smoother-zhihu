@@ -35,10 +35,10 @@ test("popup normalizeConfig migrates legacy minAnswers 12 to new default 5", () 
   assert.equal(fromString.minAnswers, 5);
 });
 
-test("popup normalizeConfig supports 2-viewport compact mode and handles invalid buffer", () => {
-  const compact = normalizeConfig({ bufferViewports: 2 });
-  const invalid = normalizeConfig({ bufferViewports: 99 });
-
-  assert.equal(compact.bufferViewports, 2);
-  assert.equal(invalid.bufferViewports, DEFAULT_CONFIG.bufferViewports);
+test("popup normalizeConfig supports 1/2/4 viewport modes and handles invalid buffer", () => {
+  assert.equal(normalizeConfig({ bufferViewports: 1 }).bufferViewports, 1);
+  assert.equal(normalizeConfig({ bufferViewports: 2 }).bufferViewports, 2);
+  assert.equal(normalizeConfig({ bufferViewports: 4 }).bufferViewports, 4);
+  assert.equal(normalizeConfig({ bufferViewports: 99 }).bufferViewports, DEFAULT_CONFIG.bufferViewports);
+  assert.equal(DEFAULT_CONFIG.bufferViewports, 2);
 });

@@ -9,8 +9,13 @@
   <body>
     <main class="app-shell">
       <header class="masthead">
-        <p class="eyebrow">浏览器扩展 · 性能优化</p>
-        <h1>知乎顺滑器</h1>
+        <div class="masthead-brand">
+          <img class="brand-logo" src="../assets/icon-128.png" alt="知乎顺滑器 Logo" width="36" height="36">
+          <div class="brand-text">
+            <p class="eyebrow">浏览器扩展 · 性能优化</p>
+            <h1>知乎顺滑器</h1>
+          </div>
+        </div>
         <p class="intro">自动冻结远离屏幕的回答，让长页面滚动保持流畅。</p>
       </header>
 
@@ -45,22 +50,22 @@
             <h2 id="buffer-title">缓冲范围</h2>
             <p>视口上下各预留几屏不冻结，越大越稳妥</p>
           </div>
-          <output id="buffer-value" class="value-mark" for="buffer-2 buffer-4 buffer-6">均衡 · 上下各 4 屏</output>
+          <output id="buffer-value" class="value-mark" for="buffer-1 buffer-2 buffer-4">均衡 · 上下各 2 屏</output>
         </div>
 
         <fieldset class="buffer-options">
           <legend class="sr-only">选择缓冲范围</legend>
           <label class="buffer-option">
-            <input id="buffer-2" type="radio" name="bufferViewports" value="2">
-            <span class="option-face"><strong>精简</strong><small>上下各 2 屏</small></span>
+            <input id="buffer-1" type="radio" name="bufferViewports" value="1">
+            <span class="option-face"><strong>极速</strong><small>上下各 1 屏</small></span>
           </label>
           <label class="buffer-option">
-            <input id="buffer-4" type="radio" name="bufferViewports" value="4" checked>
-            <span class="option-face"><strong>均衡</strong><small>上下各 4 屏</small></span>
+            <input id="buffer-2" type="radio" name="bufferViewports" value="2" checked>
+            <span class="option-face"><strong>均衡</strong><small>上下各 2 屏</small></span>
           </label>
           <label class="buffer-option">
-            <input id="buffer-6" type="radio" name="bufferViewports" value="6">
-            <span class="option-face"><strong>稳妥</strong><small>上下各 6 屏</small></span>
+            <input id="buffer-4" type="radio" name="bufferViewports" value="4">
+            <span class="option-face"><strong>稳妥</strong><small>上下各 4 屏</small></span>
           </label>
         </fieldset>
       </section>
