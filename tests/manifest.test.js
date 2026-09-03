@@ -45,17 +45,17 @@ test("content script access is limited to Zhihu question pages", () => {
 });
 
 test("release metadata and real-page performance CSS stay aligned", () => {
-  assert.equal(manifest.version, "0.3.18");
+  assert.equal(manifest.version, "0.3.19");
   assert.equal(packageJson.version, manifest.version);
 
   const css = fs.readFileSync(path.join(projectRoot, "src/content/content.css"), "utf8");
-  assert.doesNotMatch(css, /content-visibility:\s*auto/);
+  assert.doesNotMatch(css, /\.zhihu-smoother-answer\.zhihu-smoother-parked\s*\{[\s\S]*content-visibility:\s*auto/);
   assert.match(css, /\.zhihu-smoother-answer\.zhihu-smoother-parked\s*\{[\s\S]*content-visibility:\s*hidden;/);
   assert.doesNotMatch(css, /\.zhihu-smoother-placeholder\s*\{/);
   assert.match(css, /\.QuestionAnswers-answers \.Pc-word-new\s*\{[\s\S]*display:\s*none !important;/);
   assert.match(css, /\.Question-sideColumn\s*\{[\s\S]*contain:\s*layout;/);
-  assert.match(css, /\.QuestionAnswers-answers div\[role="listitem"\]:empty:not\(:first-child\)/);
-  assert.match(css, /\.zhihu-smoother-answer\.zhihu-smoother-parked img\s*\{[\s\S]*content-visibility:\s*hidden !important;/);
-  assert.match(css, /@media print\s*\{[\s\S]*\.zhihu-smoother-answer\.zhihu-smoother-parked img\s*\{[\s\S]*content-visibility:\s*visible !important;/);
+  assert.match(css, /\.QuestionAnswers-answers \.List-item:not\(\.zhihu-smoother-answer\)\s*\{[\s\S]*content-visibility:\s*auto;/);
+  assert.match(css, /\.zhihu-smoother-answer\.zhihu-smoother-parked img\s*\{[\s\S]*will-change:\s*auto !important;/);
+  assert.match(css, /@media print\s*\{[\s\S]*\.QuestionAnswers-answers \.List-item\s*\{[\s\S]*content-visibility:\s*visible !important;/);
   assert.match(css, /html\[data-theme="dark"\]\s+\.zhihu-smoother-page-widget/);
 });

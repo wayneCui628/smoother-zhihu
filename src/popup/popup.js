@@ -4,19 +4,18 @@ const STORAGE_KEY = 'smootherConfig';
 const DEFAULT_CONFIG = Object.freeze({
   enabled: true,
   showPageWidget: true,
-  bufferViewports: 2,
+  bufferViewports: 4,
   minAnswers: 5,
 });
 const BUFFER_LABELS = Object.freeze({
-  1: '极速',
-  2: '均衡',
-  4: '稳妥',
+  2: '精简',
+  4: '均衡',
+  6: '稳妥',
 });
 
 let currentConfig = { ...DEFAULT_CONFIG };
 let activeTab = null;
 let statusRequestId = 0;
-let lastStats = null;
 
 const elements = {};
 
@@ -28,7 +27,6 @@ function initialize() {
   elements.enabledToggle = document.getElementById('enabled-toggle');
   elements.toggleHint = document.getElementById('toggle-hint');
   elements.widgetToggle = document.getElementById('show-page-widget-toggle');
-  elements.widgetToggleHint = document.getElementById('widget-toggle-hint');
   elements.bufferValue = document.getElementById('buffer-value');
   elements.bufferInputs = Array.from(document.querySelectorAll('input[name="bufferViewports"]'));
   elements.statusDot = document.getElementById('status-dot');
@@ -109,7 +107,6 @@ function handleBufferChange(event) {
   if (BUFFER_LABELS[bufferViewports]) {
     saveConfig({
       ...currentConfig,
-      enabled: elements.enabledToggle.checked,
       bufferViewports,
     });
   }
@@ -155,7 +152,6 @@ function findActiveTab(done) {
 
 function requestStatus() {
   const requestId = ++statusRequestId;
-  lastStats = null;
   elements.restoreButton.disabled = true;
 
   if (!activeTab || typeof activeTab.id !== 'number') {
@@ -175,7 +171,6 @@ function requestStatus() {
 
 function renderSupportedState(stats) {
   const safeStats = stats && typeof stats === 'object' ? stats : {};
-  lastStats = safeStats;
   const enabled = typeof safeStats.enabled === 'boolean' ? safeStats.enabled : currentConfig.enabled;
   const total = toCount(safeStats.total);
   const parked = toCount(safeStats.parked);

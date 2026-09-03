@@ -18,7 +18,7 @@
 
   const DEFAULT_CONFIG = Object.freeze({
     enabled: true,
-    bufferViewports: 2,
+    bufferViewports: 4,
     minAnswers: 5,
     showPageWidget: true,
   });
@@ -36,15 +36,22 @@
   const DEFAULT_INTRINSIC_HEIGHT = 360;
   const DEFAULT_VIEWPORT_HEIGHT = 800;
   const SUSPICIOUS_INTRINSIC_HEIGHTS = new Set([640, 672]);
-  const HEIGHT_POOL_MIN = 120;
-  const HEIGHT_POOL_MAX = 1200;
   // A row whose height changed recently (for example a comment section that
   // was just opened) is still settling; parking it right away would freeze a
   // stale height. Keep it live for this grace period instead.
   const PIN_HEIGHT_CHANGE_GRACE_MS = 5000;
 
   function clampNumber(value, fallback, limits) {
-    const number = typeof value === "number" ? value : Number(value);
+    if (value === null || value === undefined || typeof value === "boolean" || Array.isArray(value)) {
+      return fallback;
+    }
+    if (typeof value === "string" && value.trim() === "") {
+      return fallback;
+    }
+    if (typeof value !== "number" && typeof value !== "string") {
+      return fallback;
+    }
+    const number = Number(value);
     if (!Number.isFinite(number)) {
       return fallback;
     }
@@ -558,24 +565,6 @@
     }
   }
 
-  function replaceElement(oldElement, newElement) {
-    if (!oldElement || !newElement) {
-      return false;
-    }
-
-    if (typeof oldElement.replaceWith === "function") {
-      oldElement.replaceWith(newElement);
-      return true;
-    }
-
-    if (oldElement.parentNode && typeof oldElement.parentNode.replaceChild === "function") {
-      oldElement.parentNode.replaceChild(newElement, oldElement);
-      return true;
-    }
-
-    return false;
-  }
-
   function isAttached(node, root, documentObject) {
     if (!node) {
       return false;
@@ -634,6 +623,7 @@
       this.intersectionObserver = null;
       this.resizeObserver = null;
       this.rafId = null;
+      this._scrollCheckRafId = null;
       this._addedNodeQueue = new Set();
       this._addedNodeRafId = null;
       this._addedNodeQueueVersion = 0;
@@ -842,9 +832,10 @@
     }
 
     _optimizeAnswerImages(element) {
-      if (!element || typeof element.querySelectorAll !== "function") {
+      if (!element || element._smootherImgOpt || typeof element.querySelectorAll !== "function") {
         return;
       }
+      element._smootherImgOpt = true;
       try {
         const images = element.querySelectorAll("img");
         for (let i = 0; i < images.length; i++) {
@@ -914,10 +905,41 @@
       return this.refresh();
     }
 
+    _checkInViewportParked() {
+      if (!this.started || !this.config.enabled || this._parkedCount === 0) {
+        return;
+      }
+      const vh = this._viewportHeight();
+      const toRestore = [];
+      for (const record of this.recordsById.values()) {
+        if (record.parked && record.element) {
+          const rect = getRect(record.element);
+          if (rect && rect.height > 0 && rect.bottom >= -200 && rect.top <= vh + 200) {
+            toRestore.push(record);
+          }
+        }
+      }
+      for (let i = 0; i < toRestore.length; i++) {
+        this._restoreRecord(toRestore[i]);
+      }
+    }
+
     scheduleUpdate() {
-      // IntersectionObserver owns scroll-driven work when available. In
-      // particular, do not scan or walk every record from a scroll handler.
       if (this.intersectionObserver) {
+        if (!this.config.enabled || !this.started || this._parkedCount === 0 || this._scrollCheckRafId !== null) {
+          return;
+        }
+        const callback = () => {
+          this._scrollCheckRafId = null;
+          if (!this.destroyed && this.started && this.config.enabled) {
+            this._checkInViewportParked();
+          }
+        };
+        if (typeof this._raf === "function") {
+          this._scrollCheckRafId = this._raf.call(this.window, callback);
+        } else {
+          this._scrollCheckRafId = setTimeout(callback, 16);
+        }
         return;
       }
       if (!this.config.enabled || !this.started || this.rafId !== null) {
@@ -940,6 +962,15 @@
     }
 
     cancelScheduledUpdate() {
+      if (this._scrollCheckRafId !== null) {
+        if (typeof this._cancelRaf === "function") {
+          this._cancelRaf.call(this.window, this._scrollCheckRafId);
+        } else {
+          clearTimeout(this._scrollCheckRafId);
+        }
+        this._scrollCheckRafId = null;
+      }
+
       if (this.rafId === null) {
         return;
       }
@@ -1117,8 +1148,10 @@
       const style = this._computedStyle(element);
       const intrinsicSize = style && (style.containIntrinsicSize || style.webkitContentVisibility) ||
         (element && element.style && (element.style.containIntrinsicSize || element.style.containIntrinsicBlockSize));
-      if (intrinsicSize && String(intrinsicSize).includes(String(Math.round(height)))) {
-        return true;
+      if (rect && !this._isNearViewport(rect, this._viewportHeight(), 0)) {
+        if (intrinsicSize && String(intrinsicSize).includes(String(Math.round(height)))) {
+          return true;
+        }
       }
 
       if (this._hasAutoContentVisibility(element) && rect) {
@@ -1141,27 +1174,6 @@
       return !this._isLikelyIntrinsicHeight(element, height, rect || getRect(element));
     }
 
-    _rememberHeight(height) {
-      if (!finitePositive(height) || height < HEIGHT_POOL_MIN || height > HEIGHT_POOL_MAX) {
-        return;
-      }
-      this._recentHeights.push(height);
-      if (this._recentHeights.length > 31) {
-        this._recentHeights.shift();
-      }
-    }
-
-    _medianHeight() {
-      if (this._recentHeights.length === 0) {
-        return DEFAULT_INTRINSIC_HEIGHT;
-      }
-      const sorted = [...this._recentHeights].sort((left, right) => left - right);
-      const middle = Math.floor(sorted.length / 2);
-      return sorted.length % 2 === 0
-        ? (sorted[middle - 1] + sorted[middle]) / 2
-        : sorted[middle];
-    }
-
     _setMeasuredHeight(record, height) {
       if (!finitePositive(height)) {
         return false;
@@ -1172,7 +1184,6 @@
       record.height = rounded;
       record.lastMeasuredHeight = rounded;
       if (changed) {
-        this._rememberHeight(rounded);
         // Only a change against an already known height counts as recent
         // activity: the first trustworthy measurement of a row is not one.
         if (finitePositive(previous)) {
@@ -1337,11 +1348,11 @@
     _restoreParkedStyles(record, element = record && record.element) {
       const style = element && element.style;
       const saved = record && record.parkedInlineStyles;
-      if (style && saved) {
-        style.contentVisibility = saved.contentVisibility;
-        style.containIntrinsicSize = saved.containIntrinsicSize;
-        style.containIntrinsicInlineSize = saved.containIntrinsicInlineSize;
-        style.containIntrinsicBlockSize = saved.containIntrinsicBlockSize;
+      if (style) {
+        style.contentVisibility = (saved && saved.contentVisibility !== "hidden") ? saved.contentVisibility : "";
+        style.containIntrinsicSize = (saved && saved.containIntrinsicSize) || "";
+        style.containIntrinsicInlineSize = (saved && saved.containIntrinsicInlineSize) || "";
+        style.containIntrinsicBlockSize = (saved && saved.containIntrinsicBlockSize) || "";
       }
       if (element) {
         removeClass(element, PARKED_CLASS);
@@ -1836,6 +1847,7 @@
       for (const record of this.recordsById.values()) {
         removeClass(record.element, ANSWER_CLASS);
       }
+      this._verticalBoxCache = null;
       this.started = false;
     }
   }

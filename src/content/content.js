@@ -79,11 +79,11 @@
       const values = result && typeof result === "object" ? result : {};
       const stored = values[STORAGE_KEY] ?? values[LEGACY_STORAGE_KEY] ?? values[SECONDARY_LEGACY_STORAGE_KEY];
       const direct = {
-            enabled: values.enabled,
-            bufferViewports: values.bufferViewports,
-            minAnswers: values.minAnswers,
-            showPageWidget: values.showPageWidget,
-          };
+        enabled: values.enabled,
+        bufferViewports: values.bufferViewports,
+        minAnswers: values.minAnswers,
+        showPageWidget: values.showPageWidget,
+      };
       const hasDirectValue = Object.values(direct).some((entry) => entry !== undefined);
       const candidate = stored && typeof stored === "object"
         ? stored
@@ -291,6 +291,12 @@
 
     function refreshPageWidget() {
       if (destroyed || !pageWidget) {
+        return;
+      }
+
+      const currentHref = windowObject && windowObject.location ? windowObject.location.href : "";
+      if (currentHref && lastHref && currentHref !== lastHref) {
+        onRouteChange();
         return;
       }
 
@@ -560,10 +566,10 @@
       virtualizer,
       getStats: () => statusWithConfig(virtualizer),
       updateConfig: (config) => {
-        const status = virtualizer.updateConfig(config);
+        virtualizer.updateConfig(config);
         persistConfig(storage, virtualizer.getConfig());
         refreshPageWidget();
-        return statusWithConfig(virtualizer) || status;
+        return statusWithConfig(virtualizer);
       },
       destroy: () => {
         if (destroyed) {
@@ -589,14 +595,15 @@
       return null;
     }
 
-    const existing = globalObject.__ZHihuAnswerVirtualizerController;
+    const existing = globalObject.__ZhihuAnswerVirtualizerController ||
+      globalObject.__ZHihuAnswerVirtualizerController;
     if (existing && typeof existing.getStats === "function") {
       return existing;
     }
 
     const controller = createController(options);
     if (controller) {
-      globalObject.__ZHihuAnswerVirtualizerController = controller;
+      globalObject.__ZhihuAnswerVirtualizerController = controller;
     }
     return controller;
   }

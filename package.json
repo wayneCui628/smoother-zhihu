@@ -1,6 +1,6 @@
 {
   "name": "smoother-zhihu",
-  "version": "0.3.18",
+  "version": "0.3.19",
   "private": true,
   "description": "A dependency-free Chromium extension that keeps long Zhihu answer pages responsive.",
   "scripts": {

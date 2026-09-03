@@ -214,7 +214,15 @@
     const summary = appendElement(documentObject, toggle, "span", "zhihu-smoother-widget__summary");
     appendElement(documentObject, summary, "strong", "zhihu-smoother-widget__summary-metric", "0 / 0");
     appendElement(documentObject, summary, "span", "zhihu-smoother-widget__summary-label", "已冻结");
-    appendElement(documentObject, summary, "span", "zhihu-smoother-widget__status-dot");
+    const statusDot = appendElement(documentObject, summary, "span", "zhihu-smoother-widget__status-dot");
+    setAttribute(statusDot, "aria-hidden", "true");
+
+    // The live region is independent of the details panel, so its role
+    // remains valid to screen readers while the details panel is collapsed.
+    const liveStatus = appendElement(documentObject, root, "div", "zhihu-smoother-widget__live-status", "正在观察");
+    setAttribute(liveStatus, "role", "status");
+    setAttribute(liveStatus, "aria-live", "polite");
+    setAttribute(liveStatus, "aria-atomic", "true");
 
     const details = appendElement(documentObject, root, "section", "zhihu-smoother-widget__details");
     if (details) {
@@ -222,13 +230,6 @@
       setAttribute(details, "id", DETAILS_ID);
       if ("hidden" in details) details.hidden = true;
     }
-
-    // The live region is independent of the interactive button, so its role
-    // remains valid while the details panel is collapsed or expanded.
-    const liveStatus = appendElement(documentObject, details, "div", "zhihu-smoother-widget__live-status", "正在观察");
-    setAttribute(liveStatus, "role", "status");
-    setAttribute(liveStatus, "aria-live", "polite");
-    setAttribute(liveStatus, "aria-atomic", "true");
 
     appendElement(documentObject, details, "p", "zhihu-smoother-widget__eyebrow", "优化状态");
     appendElement(documentObject, details, "h2", "zhihu-smoother-widget__heading", "知乎顺滑器");
@@ -368,10 +369,6 @@
       return this;
     }
 
-    toggleExpanded() {
-      return this.setExpanded(!this.expanded);
-    }
-
     /**
      * Keep the receipt clear of Zhihu's fixed corner controls. This performs
      * one small DOM query and two geometry reads; callers decide the cadence.
@@ -423,10 +420,6 @@
         this.position = next;
       }
       return this;
-    }
-
-    avoidCornerButtons() {
-      return this.reposition();
     }
 
     setVisible(visible) {

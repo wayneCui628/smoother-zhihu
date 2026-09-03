@@ -23,6 +23,8 @@ test("popup normalizeConfig falls back to default minAnswers when invalid", () =
   });
 
   assert.equal(config.minAnswers, DEFAULT_CONFIG.minAnswers);
+  assert.equal(normalizeConfig({ minAnswers: null }).minAnswers, DEFAULT_CONFIG.minAnswers);
+  assert.equal(normalizeConfig({ minAnswers: "" }).minAnswers, DEFAULT_CONFIG.minAnswers);
 });
 
 test("popup normalizeConfig migrates legacy minAnswers 12 to new default 5", () => {
@@ -33,10 +35,10 @@ test("popup normalizeConfig migrates legacy minAnswers 12 to new default 5", () 
   assert.equal(fromString.minAnswers, 5);
 });
 
-test("popup normalizeConfig supports 1-viewport fast mode and handles invalid buffer", () => {
-  const fast = normalizeConfig({ bufferViewports: 1 });
+test("popup normalizeConfig supports 2-viewport compact mode and handles invalid buffer", () => {
+  const compact = normalizeConfig({ bufferViewports: 2 });
   const invalid = normalizeConfig({ bufferViewports: 99 });
 
-  assert.equal(fast.bufferViewports, 1);
+  assert.equal(compact.bufferViewports, 2);
   assert.equal(invalid.bufferViewports, DEFAULT_CONFIG.bufferViewports);
 });

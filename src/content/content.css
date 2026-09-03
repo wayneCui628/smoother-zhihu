@@ -5,15 +5,11 @@
   display: none !important;
 }
 
-/* Virtual Sentinel Pre-fetcher:
- * 提前触发知乎底部的加载感知，让下一批回答在用户滑到底部前即在后台就绪。
- * 仅在已有回答时生效(:not(:first-child))，防止首屏骨架屏穿透。
- */
-.QuestionAnswers-answers div[role="listitem"]:empty:not(:first-child) {
-  min-height: 800px !important;
-  margin-top: -799px !important;
-  pointer-events: none !important;
-  opacity: 0 !important;
+/* 抗点击交互阻塞：知乎新追加且尚未进入视口的回答卡片，跳过初次挂载时的繁重计算与强制回流，
+ * 避免 500+ DOM 节点瞬间塞进页面阻塞用户的点击交互 */
+.QuestionAnswers-answers .List-item:not(.zhihu-smoother-answer) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
 }
 
 /* 侧边栏样式与布局隔离：避免右侧频繁局部重排扩散至主流，同时保留 paint 允许弹层溢出 */
@@ -36,7 +32,6 @@
 }
 
 .zhihu-smoother-answer.zhihu-smoother-parked img {
-  content-visibility: hidden !important;
   will-change: auto !important;
 }
 
@@ -179,8 +174,10 @@
   width: 1px;
   height: 1px;
   padding: 0;
+  margin: -1px;
   overflow: hidden;
-  clip: rect(0 0 0 0);
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }
@@ -324,13 +321,11 @@
 
 @media print {
   .zhihu-smoother-answer.zhihu-smoother-parked,
-  .zhihu-smoother-answer.zhihu-smoother-parked img {
+  .zhihu-smoother-answer.zhihu-smoother-parked img,
+  .QuestionAnswers-answers .List-item {
     content-visibility: visible !important;
     contain-intrinsic-block-size: none !important;
-  }
-
-  .QuestionAnswers-answers div[role="listitem"]:empty {
-    display: none !important;
+    contain-intrinsic-size: none !important;
   }
 
   .zhihu-smoother-page-widget {

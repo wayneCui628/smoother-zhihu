@@ -354,7 +354,7 @@ class FakeResizeObserver {
 test("normalizeConfig applies defaults, types, and safe bounds", () => {
   assert.deepEqual(normalizeConfig(), {
     enabled: true,
-    bufferViewports: 2,
+    bufferViewports: 4,
     minAnswers: 5,
     showPageWidget: true,
   });
@@ -374,6 +374,14 @@ test("normalizeConfig applies defaults, types, and safe bounds", () => {
   assert.equal(normalizeConfig({ showPageWidget: "unexpected" }).showPageWidget, true);
   assert.equal(normalizeConfig({ minAnswers: 12 }).minAnswers, 5);
   assert.equal(normalizeConfig({ minAnswers: "12" }).minAnswers, 5);
+  assert.equal(normalizeConfig({ minAnswers: null }).minAnswers, 5);
+  assert.equal(normalizeConfig({ minAnswers: "" }).minAnswers, 5);
+  assert.equal(normalizeConfig({ minAnswers: false }).minAnswers, 5);
+  assert.equal(normalizeConfig({ minAnswers: [] }).minAnswers, 5);
+  assert.equal(normalizeConfig({ minAnswers: "   " }).minAnswers, 5);
+  assert.equal(normalizeConfig({ bufferViewports: null }).bufferViewports, 4);
+  assert.equal(normalizeConfig({ bufferViewports: "" }).bufferViewports, 4);
+  assert.equal(normalizeConfig({ bufferViewports: "   " }).bufferViewports, 4);
 });
 
 test("findAnswerItems recognizes answers and excludes comment rows", () => {
@@ -1276,4 +1284,69 @@ test("optimizes images within answer element for asynchronous decoding", () => {
   assert.equal(img1.decoding, "async");
   assert.equal(img2.decoding, "async");
   virtualizer.destroy();
+});
+
+test("_checkInViewportParked unparks a record when it enters the viewport on scroll", () => {
+  FakeIntersectionObserver.instances.length = 0;
+  const answer = makeAnswer({ top: 20, bottom: 240, height: 220 });
+  const page = makeQuestionPage([answer]);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    IntersectionObserver: FakeIntersectionObserver,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+  virtualizer.start();
+
+  const record = virtualizer.records.get(page.listRoot.children[0]);
+  assert.ok(record);
+
+  // 模拟被暂时冻结在远离视口的位置
+  virtualizer._parkRecord(record, { top: 2000, bottom: 2220, height: 220 });
+  assert.equal(record.parked, true);
+
+  // 模拟用户瞬间滚动使得该节点进入视口 [100, 320]
+  record.element.getBoundingClientRect = () => ({
+    top: 100,
+    bottom: 320,
+    height: 220,
+    width: 600,
+    left: 0,
+    right: 600,
+  });
+
+  // 执行保底解冻
+  virtualizer._checkInViewportParked();
+  assert.equal(record.parked, false);
+  assert.equal(record.element.style.contentVisibility, "");
+
+  virtualizer.destroy();
+});
+
+test("_restoreParkedStyles strictly cleanses stale contentVisibility hidden value", () => {
+  const answer = makeAnswer({ top: 0, bottom: 200, height: 200 });
+  const page = makeQuestionPage([answer]);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    config: { enabled: true },
+  });
+
+  const record = {
+    element: answer,
+    parked: true,
+    parkedInlineStyles: {
+      contentVisibility: "hidden", // 模拟历史残留的 hidden
+      containIntrinsicSize: "auto 200px",
+      containIntrinsicInlineSize: "",
+      containIntrinsicBlockSize: "200px",
+    },
+  };
+
+  answer.style.contentVisibility = "hidden";
+  virtualizer._restoreParkedStyles(record, answer);
+
+  // 断言绝不能恢复为 "hidden"，必须被彻底清洗为空字符串
+  assert.equal(answer.style.contentVisibility, "");
+  assert.equal(answer.style.containIntrinsicSize, "auto 200px");
 });

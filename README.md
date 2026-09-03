@@ -32,7 +32,7 @@
 项目没有运行时依赖，也不需要打包：
 
 ```powershell
-node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js
+node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js tests/popup.test.js
 ```
 
 当前原型支持：
