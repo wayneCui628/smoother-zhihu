@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="zhihuBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#008eff" />
+      <stop offset="100%" stop-color="#005bb5" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#zhihuBlue)" />
+  <path d="M 30 75 C 50 45, 80 40, 100 52 C 85 58, 65 65, 45 88 Z" fill="#ffffff" opacity="0.95" />
+  <path d="M 45 55 C 62 32, 85 30, 98 38 C 85 43, 70 48, 55 64 Z" fill="#ffffff" opacity="0.75" />
+  <circle cx="95" cy="45" r="5" fill="#ffffff" opacity="0.9" />
+</svg>
