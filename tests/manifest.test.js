@@ -27,6 +27,8 @@ test("all manifest assets exist and the virtualizer loads first", () => {
     manifest.action.default_popup,
     ...contentScript.css,
     ...contentScript.js,
+    ...Object.values(manifest.icons || {}),
+    ...Object.values(manifest.action.default_icon || {}),
   ];
 
   for (const asset of assets) {
