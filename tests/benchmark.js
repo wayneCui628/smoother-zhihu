@@ -1,9 +1,25 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { spawn } = require('child_process');
 const http = require('http');
 
-const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+function findChromePath() {
+  if (process.env.CHROME_PATH && fs.existsSync(process.env.CHROME_PATH)) {
+    return process.env.CHROME_PATH;
+  }
+  const candidates = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  ];
+  return candidates.find((c) => fs.existsSync(c)) || 'google-chrome';
+}
+
+const chromePath = findChromePath();
 const virtualizerSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'virtualizer.js'), 'utf8');
 const contentCss = fs.readFileSync(path.join(__dirname, '..', 'src', 'content', 'content.css'), 'utf8');
 
@@ -100,7 +116,7 @@ async function runTestScenario(enableExtension) {
 
   const chromeProc = spawn(chromePath, [
     '--remote-debugging-port=9222',
-    `--user-data-dir=${path.join(process.env.TEMP, `chrome-bench-${enableExtension ? 'opt' : 'raw'}`)}`,
+    `--user-data-dir=${path.join(os.tmpdir(), `chrome-bench-${enableExtension ? 'opt' : 'raw'}`)}`,
     '--no-first-run',
     '--no-default-browser-check',
     '--headless=new',
@@ -264,6 +280,7 @@ async function runTestScenario(enableExtension) {
           totalItems: sData.totalItems,
           activeItems: sData.activeItems,
           totalDomNodes: sData.totalDomNodes,
+          vStats: sData.vStats,
           layoutDuration: Math.round(metricsMap.LayoutDuration * 1000),
           recalcStyleDuration: Math.round(metricsMap.RecalcStyleDuration * 1000),
           layoutCount: metricsMap.LayoutCount,
