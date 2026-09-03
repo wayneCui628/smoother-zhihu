@@ -1,6 +1,10 @@
-# 知乎顺滑器 (Smoother Zhihu)
+<p align="center">
+  <img src="src/assets/icon-128.png" alt="知乎顺滑器 Logo" width="80" height="80">
+</p>
 
-面向 Chromium 内核浏览器的轻量级极客扩展。专为解决知乎网页版（尤其是超长回答问答流）越滚越卡、内存飙升、交互阻塞与大面积空白而生。
+<h1 align="center">知乎顺滑器 (Smoother Zhihu)</h1>
+
+<p align="center">面向 Chromium 内核浏览器的轻量级极客扩展。专为解决知乎网页版（尤其是超长回答问答流）越滚越卡、内存飙升、交互阻塞与大面积空白而生。</p>
 
 [![CI](https://github.com/wayneCui628/smoother-zhihu/actions/workflows/ci.yml/badge.svg)](https://github.com/wayneCui628/smoother-zhihu/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
