@@ -3,9 +3,27 @@
   "version": "0.3.19",
   "private": true,
   "description": "A dependency-free Chromium extension that keeps long Zhihu answer pages responsive.",
+  "author": "Wayne Cui (wayneCui628)",
+  "homepage": "https://github.com/wayneCui628/smoother-zhihu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wayneCui628/smoother-zhihu.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wayneCui628/smoother-zhihu/issues"
+  },
+  "keywords": [
+    "zhihu",
+    "chrome-extension",
+    "edge-extension",
+    "virtual-scroll",
+    "content-visibility",
+    "performance"
+  ],
   "scripts": {
     "test": "node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js tests/popup.test.js",
-    "check": "node --check src/content/virtualizer.js && node --check src/content/page-widget.js && node --check src/content/content.js && node --check src/popup/popup.js && node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js tests/popup.test.js"
+    "check": "node --check src/content/virtualizer.js && node --check src/content/page-widget.js && node --check src/content/content.js && node --check src/popup/popup.js && node --check scripts/pack.js && node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js tests/popup.test.js",
+    "pack": "node scripts/pack.js"
   },
   "engines": {
     "node": ">=20"
