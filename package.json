@@ -1,11 +1,11 @@
 {
   "name": "smoother-zhihu",
-  "version": "0.3.14",
+  "version": "0.3.18",
   "private": true,
   "description": "A dependency-free Chromium extension that keeps long Zhihu answer pages responsive.",
   "scripts": {
-    "test": "node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js",
-    "check": "node --check src/content/virtualizer.js && node --check src/content/page-widget.js && node --check src/content/content.js && node --check src/popup/popup.js && node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js"
+    "test": "node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js tests/popup.test.js",
+    "check": "node --check src/content/virtualizer.js && node --check src/content/page-widget.js && node --check src/content/content.js && node --check src/popup/popup.js && node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js tests/popup.test.js"
   },
   "engines": {
     "node": ">=20"

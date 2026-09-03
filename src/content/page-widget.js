@@ -19,7 +19,7 @@
   const WIDGET_ID = "zhihu-smoother-widget";
   const ROOT_CLASS = "zhihu-smoother-page-widget";
   const DETAILS_ID = "zhihu-smoother-widget-details";
-  const DEFAULT_MIN_ANSWERS = 12;
+  const DEFAULT_MIN_ANSWERS = 5;
   const STATE_KEY = "__zhihuSmootherPageWidgetState";
   const DEFAULT_EDGE_OFFSET = 18;
   const CORNER_GAP = 11;

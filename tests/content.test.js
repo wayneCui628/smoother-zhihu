@@ -279,3 +279,78 @@ test("waits for stored config before starting or scanning a question page", () =
   assert.equal(virtualizer.started, false);
   controller.destroy();
 });
+
+test("onRouteChange schedules retry timers if new answer list root is not yet rendered", () => {
+  const runtimeMessages = createEvent();
+  const storageChanges = createEvent();
+  const timeouts = [];
+  const window = {
+    location: { href: "https://www.zhihu.com/question/1" },
+    history: {},
+    addEventListener(type, listener) {
+      if (type === "popstate") {
+        this.popstateListener = listener;
+      }
+    },
+    removeEventListener() {},
+    setTimeout(callback, delay) {
+      timeouts.push({ callback, delay });
+      return timeouts.length;
+    },
+    clearTimeout() {},
+  };
+  const document = { defaultView: window, hidden: false };
+  let rescans = 0;
+  const virtualizer = {
+    started: true,
+    listRoot: null,
+    config: { enabled: true, bufferViewports: 4, minAnswers: 12, showPageWidget: true },
+    getStats() {
+      return { total: 0, parked: 0, live: 0, enabled: true };
+    },
+    getConfig() {
+      return { ...this.config };
+    },
+    updateConfig() {},
+    rescan() {
+      rescans += 1;
+    },
+    destroy() {},
+  };
+  const controller = createController({
+    chrome: {
+      runtime: { onMessage: runtimeMessages },
+      storage: {
+        sync: {
+          get(_keys, callback) {
+            callback({ [STORAGE_KEY]: { enabled: true, bufferViewports: 4, minAnswers: 12 } });
+          },
+          set() {},
+        },
+        onChanged: storageChanges,
+      },
+    },
+    document,
+    window,
+    virtualizerApi: {
+      normalizeConfig(value) {
+        return value;
+      },
+      createVirtualizer() {
+        return virtualizer;
+      },
+    },
+  });
+
+  window.location.href = "https://www.zhihu.com/question/2";
+  window.popstateListener();
+
+  assert.equal(rescans, 1, "immediately tries once");
+  assert.equal(timeouts.length, 4, "schedules 4 backoff retries when listRoot is missing");
+  assert.deepEqual(timeouts.map((item) => item.delay), [150, 400, 900, 1800]);
+
+  virtualizer.listRoot = {};
+  timeouts[0].callback();
+
+  controller.destroy();
+});

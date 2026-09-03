@@ -5,10 +5,39 @@
   display: none !important;
 }
 
+/* Virtual Sentinel Pre-fetcher:
+ * 提前触发知乎底部的加载感知，让下一批回答在用户滑到底部前即在后台就绪。
+ * 仅在已有回答时生效(:not(:first-child))，防止首屏骨架屏穿透。
+ */
+.QuestionAnswers-answers div[role="listitem"]:empty:not(:first-child) {
+  min-height: 800px !important;
+  margin-top: -799px !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+/* 侧边栏样式与布局隔离：避免右侧频繁局部重排扩散至主流，同时保留 paint 允许弹层溢出 */
+.Question-sideColumn {
+  contain: layout;
+}
+
+/* 屏蔽知乎问答流内无用的商业挂件与下载提示 */
+.QuestionAnswers-answers .Pc-card,
+.QuestionAnswers-answers .Pc-feed-ad,
+.QuestionAnswers-answers .AdItem,
+.QuestionAnswers-answers .AppBanner {
+  display: none !important;
+}
+
 /* Frozen rows stay in React's DOM ownership. The script writes their measured
  * block size inline, while Chromium skips layout and paint for the subtree. */
 .zhihu-smoother-answer.zhihu-smoother-parked {
   content-visibility: hidden;
+}
+
+.zhihu-smoother-answer.zhihu-smoother-parked img {
+  content-visibility: hidden !important;
+  will-change: auto !important;
 }
 
 /* Small, self-contained performance receipt. All selectors are namespaced so
@@ -291,4 +320,52 @@
   .zhihu-smoother-widget__toggle::after {
     transition: none;
   }
+}
+
+@media print {
+  .zhihu-smoother-answer.zhihu-smoother-parked,
+  .zhihu-smoother-answer.zhihu-smoother-parked img {
+    content-visibility: visible !important;
+    contain-intrinsic-block-size: none !important;
+  }
+
+  .QuestionAnswers-answers div[role="listitem"]:empty {
+    display: none !important;
+  }
+
+  .zhihu-smoother-page-widget {
+    display: none !important;
+  }
+}
+
+html[data-theme="dark"] .zhihu-smoother-page-widget {
+  border-color: #333333;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme="dark"] .zhihu-smoother-widget__toggle {
+  color: #e0e0e0;
+}
+
+html[data-theme="dark"] .zhihu-smoother-widget__toggle::after {
+  border-right-color: #e0e0e0;
+  border-bottom-color: #e0e0e0;
+}
+
+html[data-theme="dark"] .zhihu-smoother-widget__heading,
+html[data-theme="dark"] .zhihu-smoother-widget__summary-metric,
+html[data-theme="dark"] .zhihu-smoother-widget__ratio,
+html[data-theme="dark"] .zhihu-smoother-widget__value {
+  color: #ffffff;
+}
+
+html[data-theme="dark"] .zhihu-smoother-widget__progress,
+html[data-theme="dark"] .zhihu-smoother-widget__progress::-webkit-progress-bar {
+  background: #2a2a2a;
+}
+
+html[data-theme="dark"] .zhihu-smoother-widget__stats {
+  border-top-color: #2e2e2e;
 }

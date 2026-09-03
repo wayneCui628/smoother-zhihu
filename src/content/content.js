@@ -395,18 +395,24 @@
     installWidgetUpdates();
     refreshPageWidget();
 
-    const onRouteChange = () => {
-      if (destroyed) {
-        return;
+    let routeRetryTimers = [];
+
+    function clearRouteRetries() {
+      const clearTimeoutFn = (windowObject && windowObject.clearTimeout) ||
+        (globalObject && globalObject.clearTimeout) ||
+        (typeof clearTimeout === "function" ? clearTimeout : null);
+      for (const timer of routeRetryTimers) {
+        if (typeof clearTimeoutFn === "function") {
+          clearTimeoutFn.call(windowObject, timer);
+        }
       }
-      const href = windowObject && windowObject.location ? windowObject.location.href : "";
-      if (href === lastHref) {
-        // pushState can be called with the same URL while the page is loading;
-        // a rescan is still useful for newly mounted answer nodes.
-      }
-      lastHref = href;
-      if (!configReady) {
-        return;
+      routeRetryTimers = [];
+    }
+    cleanups.push(clearRouteRetries);
+
+    const triggerVirtualizerSync = () => {
+      if (destroyed || !configReady) {
+        return false;
       }
       const config = typeof virtualizer.getConfig === "function" ? virtualizer.getConfig() : null;
       if (config && config.enabled && !virtualizer.started && typeof virtualizer.start === "function") {
@@ -417,6 +423,37 @@
         virtualizer.refresh();
       }
       refreshPageWidget();
+      return Boolean(virtualizer.listRoot);
+    };
+
+    const onRouteChange = () => {
+      if (destroyed) {
+        return;
+      }
+      const href = windowObject && windowObject.location ? windowObject.location.href : "";
+      lastHref = href;
+      clearRouteRetries();
+
+      if (triggerVirtualizerSync()) {
+        return;
+      }
+
+      const setTimeoutFn = (windowObject && windowObject.setTimeout) ||
+        (globalObject && globalObject.setTimeout) ||
+        (typeof setTimeout === "function" ? setTimeout : null);
+      if (typeof setTimeoutFn !== "function") {
+        return;
+      }
+
+      const delays = [150, 400, 900, 1800];
+      delays.forEach((delay) => {
+        const timer = setTimeoutFn.call(windowObject, () => {
+          if (triggerVirtualizerSync()) {
+            clearRouteRetries();
+          }
+        }, delay);
+        routeRetryTimers.push(timer);
+      });
     };
 
     cleanups.push(...attachRouteListeners(windowObject, onRouteChange));

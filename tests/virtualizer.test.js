@@ -354,8 +354,8 @@ class FakeResizeObserver {
 test("normalizeConfig applies defaults, types, and safe bounds", () => {
   assert.deepEqual(normalizeConfig(), {
     enabled: true,
-    bufferViewports: 4,
-    minAnswers: 12,
+    bufferViewports: 2,
+    minAnswers: 5,
     showPageWidget: true,
   });
   assert.deepEqual(normalizeConfig({ enabled: "false", bufferViewports: -3, minAnswers: 50000 }), {
@@ -372,6 +372,8 @@ test("normalizeConfig applies defaults, types, and safe bounds", () => {
   });
   assert.equal(normalizeConfig({ showPageWidget: "false" }).showPageWidget, false);
   assert.equal(normalizeConfig({ showPageWidget: "unexpected" }).showPageWidget, true);
+  assert.equal(normalizeConfig({ minAnswers: 12 }).minAnswers, 5);
+  assert.equal(normalizeConfig({ minAnswers: "12" }).minAnswers, 5);
 });
 
 test("findAnswerItems recognizes answers and excludes comment rows", () => {
@@ -1198,5 +1200,80 @@ test("shares one vertical-box read across all parked records", () => {
   assert.equal(first.style.containIntrinsicBlockSize, "188px");
   assert.equal(second.style.containIntrinsicBlockSize, "188px");
   assert.equal(virtualizer._verticalBoxCache, 32);
+  virtualizer.destroy();
+});
+
+test("keeps an answer with active playing media live even when offscreen", () => {
+  const answer = makeAnswer(
+    { top: 2000, bottom: 2500, height: 500 },
+    JSON.stringify({ type: "answer", itemId: "video-answer" }),
+  );
+  const video = new FakeElement("", {}, { top: 0, bottom: 0, height: 0 }, "video");
+  video.paused = false;
+  video.ended = false;
+  answer.children[0].appendChild(video);
+
+  const page = makeQuestionPage([answer]);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+
+  virtualizer.start();
+  assert.equal(virtualizer.records.get(answer).parked, false);
+  virtualizer.destroy();
+});
+
+test("_ensureListRoot reconnects observer when answer list container changes", () => {
+  FakeMutationObserver.instances.length = 0;
+  const answer1 = makeAnswer(
+    { top: 10, bottom: 100, height: 90 },
+    JSON.stringify({ type: "answer", itemId: "spa-1" }),
+  );
+  const page1 = makeQuestionPage([answer1]);
+  const virtualizer = new AnswerVirtualizer({
+    document: page1.documentObject,
+    window: page1.windowObject,
+    MutationObserver: FakeMutationObserver,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+  virtualizer.start();
+
+  const originalObserver = virtualizer.observer;
+  assert.ok(originalObserver);
+
+  const answer2 = makeAnswer(
+    { top: 10, bottom: 100, height: 90 },
+    JSON.stringify({ type: "answer", itemId: "spa-2" }),
+  );
+  const page2 = makeQuestionPage([answer2]);
+  virtualizer.root = page2.documentObject;
+  virtualizer.scan();
+
+  assert.notEqual(virtualizer.observer, originalObserver);
+  assert.equal(virtualizer.listRoot, page2.listRoot);
+  virtualizer.destroy();
+});
+
+test("optimizes images within answer element for asynchronous decoding", () => {
+  const answer = makeAnswer(
+    { top: 0, bottom: 120, height: 120 },
+    JSON.stringify({ type: "answer", itemId: "img-opt-1" }),
+  );
+  const img1 = new FakeElement("RichText-image", { src: "https://pic1.zhimg.com/a.jpg" }, { top: 10, bottom: 60, height: 50 }, "img");
+  const img2 = new FakeElement("RichText-image", { src: "https://pic1.zhimg.com/b.jpg" }, { top: 70, bottom: 110, height: 40 }, "img");
+  answer.appendChild(img1);
+  answer.appendChild(img2);
+
+  const page = makeQuestionPage([answer]);
+  const virtualizer = new AnswerVirtualizer({
+    root: page.documentObject,
+    enabled: true,
+  });
+  virtualizer.start();
+
+  assert.equal(img1.decoding, "async");
+  assert.equal(img2.decoding, "async");
   virtualizer.destroy();
 });

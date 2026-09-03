@@ -18,8 +18,8 @@
 
   const DEFAULT_CONFIG = Object.freeze({
     enabled: true,
-    bufferViewports: 4,
-    minAnswers: 12,
+    bufferViewports: 2,
+    minAnswers: 5,
     showPageWidget: true,
   });
 
@@ -76,6 +76,8 @@
 
   function normalizeConfig(config) {
     const value = config && typeof config === "object" ? config : {};
+    const parsedMin = Number(value.minAnswers);
+    const minCandidate = parsedMin === 12 ? DEFAULT_CONFIG.minAnswers : value.minAnswers;
 
     return {
       enabled: normalizeBoolean(value.enabled, DEFAULT_CONFIG.enabled),
@@ -85,7 +87,7 @@
         CONFIG_LIMITS.bufferViewports,
       ),
       minAnswers: clampNumber(
-        value.minAnswers,
+        minCandidate,
         DEFAULT_CONFIG.minAnswers,
         CONFIG_LIMITS.minAnswers,
       ),
@@ -144,9 +146,7 @@
 
     if (typeof element.matches === "function") {
       try {
-        if (element.matches(selector)) {
-          return true;
-        }
+        return Boolean(element.matches(selector));
       } catch (_error) {
         // Fall through to the tiny selector matcher below for test doubles.
       }
@@ -758,6 +758,10 @@
       if (nextRoot && nextRoot !== this.listRoot) {
         this._cancelAddedNodeQueue();
         this.listRoot = nextRoot;
+        if (this.started && this.observer) {
+          this._disconnectObserver();
+          this._observe();
+        }
       }
       return this.listRoot;
     }
@@ -824,6 +828,7 @@
       }
 
       addClass(element, ANSWER_CLASS);
+      this._optimizeAnswerImages(element);
       if (!record.parked) {
         this._observeLiveRecord(record);
         // Measure right away: a registered row that knows its height can be
@@ -834,6 +839,21 @@
         this._maybeMeasureRecord(record);
       }
       return record;
+    }
+
+    _optimizeAnswerImages(element) {
+      if (!element || typeof element.querySelectorAll !== "function") {
+        return;
+      }
+      try {
+        const images = element.querySelectorAll("img");
+        for (let i = 0; i < images.length; i++) {
+          const img = images[i];
+          if (img && img.decoding !== "async") {
+            img.decoding = "async";
+          }
+        }
+      } catch (_error) {}
     }
 
     scan() {
@@ -1213,9 +1233,36 @@
       return Math.max(1, height - record.verticalBox);
     }
 
+    _hasActiveMedia(element) {
+      if (!element) {
+        return false;
+      }
+      const videos = queryAll(element, "video");
+      if (videos.some((video) => video && !video.paused && !video.ended)) {
+        return true;
+      }
+      const audios = queryAll(element, "audio");
+      if (audios.some((audio) => audio && !audio.paused && !audio.ended)) {
+        return true;
+      }
+      const iframes = queryAll(element, "iframe");
+      if (
+        iframes.some((iframe) => {
+          const src = (getAttribute(iframe, "src") || iframe.src || "").toLowerCase();
+          return src.includes("bilibili.com") || src.includes("v.qq.com") || src.includes("youku.com");
+        })
+      ) {
+        return true;
+      }
+      return false;
+    }
+
     _isPinnedRecord(record) {
       const activeElement = this.document && this.document.activeElement;
-      return Boolean(activeElement && containsNode(record.element, activeElement));
+      if (activeElement && containsNode(record.element, activeElement)) {
+        return true;
+      }
+      return this._hasActiveMedia(record.element);
     }
 
     _pinGraceRemainingMs(record) {
@@ -1508,7 +1555,7 @@
         return;
       }
 
-      const target = this._ensureListRoot();
+      const target = this.listRoot || this._ensureListRoot();
       if (!target || typeof this._mutationObserverConstructor !== "function") {
         return;
       }

@@ -4,13 +4,13 @@ const STORAGE_KEY = 'smootherConfig';
 const DEFAULT_CONFIG = Object.freeze({
   enabled: true,
   showPageWidget: true,
-  bufferViewports: 4,
-  minAnswers: 12,
+  bufferViewports: 2,
+  minAnswers: 5,
 });
 const BUFFER_LABELS = Object.freeze({
-  2: '精简',
-  4: '均衡',
-  6: '稳妥',
+  1: '极速',
+  2: '均衡',
+  4: '稳妥',
 });
 
 let currentConfig = { ...DEFAULT_CONFIG };
@@ -20,7 +20,9 @@ let lastStats = null;
 
 const elements = {};
 
-document.addEventListener('DOMContentLoaded', initialize);
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  document.addEventListener('DOMContentLoaded', initialize);
+}
 
 function initialize() {
   elements.enabledToggle = document.getElementById('enabled-toggle');
@@ -67,11 +69,13 @@ function loadConfig(done) {
 function normalizeConfig(value) {
   const raw = value && typeof value === 'object' ? value : {};
   const parsedBuffer = Number(raw.bufferViewports);
+  const rawMin = Number(raw.minAnswers);
+  const parsedMin = rawMin === 12 ? DEFAULT_CONFIG.minAnswers : rawMin;
   return {
     enabled: raw.enabled !== false,
     showPageWidget: raw.showPageWidget !== false,
     bufferViewports: BUFFER_LABELS[parsedBuffer] ? parsedBuffer : DEFAULT_CONFIG.bufferViewports,
-    minAnswers: DEFAULT_CONFIG.minAnswers,
+    minAnswers: Number.isFinite(parsedMin) && parsedMin > 0 ? Math.floor(parsedMin) : DEFAULT_CONFIG.minAnswers,
   };
 }
 
@@ -93,13 +97,21 @@ function handleEnabledChange() {
 }
 
 function handleWidgetChange() {
-  saveConfig({ ...currentConfig, showPageWidget: elements.widgetToggle.checked });
+  saveConfig({
+    ...currentConfig,
+    enabled: elements.enabledToggle.checked,
+    showPageWidget: elements.widgetToggle.checked,
+  });
 }
 
 function handleBufferChange(event) {
   const bufferViewports = Number(event.target.value);
   if (BUFFER_LABELS[bufferViewports]) {
-    saveConfig({ ...currentConfig, bufferViewports });
+    saveConfig({
+      ...currentConfig,
+      enabled: elements.enabledToggle.checked,
+      bufferViewports,
+    });
   }
 }
 
@@ -173,6 +185,7 @@ function renderSupportedState(stats) {
   if (!enabled && currentConfig.enabled) {
     elements.toggleHint.textContent = '本页已恢复；重新开启即可继续优化';
   }
+  currentConfig.enabled = enabled;
   elements.statusTitle.textContent = enabled ? '此页已优化' : '已暂停';
   elements.statusRule.textContent = enabled ? '运行中' : '已关闭';
   elements.statusDot.classList.toggle('is-ready', enabled);
@@ -241,4 +254,12 @@ function clearFeedback() {
 
 function showFeedback(message) {
   elements.feedback.textContent = message;
+}
+
+if (typeof module === 'object' && module.exports) {
+  module.exports = {
+    BUFFER_LABELS,
+    DEFAULT_CONFIG,
+    normalizeConfig,
+  };
 }
