@@ -85,7 +85,7 @@ function renderConfig() {
   elements.bufferInputs.forEach((input) => {
     input.checked = Number(input.value) === currentConfig.bufferViewports;
   });
-  elements.bufferValue.textContent = `${BUFFER_LABELS[currentConfig.bufferViewports]} · ${currentConfig.bufferViewports}`;
+  elements.bufferValue.textContent = `${BUFFER_LABELS[currentConfig.bufferViewports]} · 上下各 ${currentConfig.bufferViewports} 屏`;
 }
 
 function handleEnabledChange() {
@@ -177,7 +177,7 @@ function renderSupportedState(stats) {
   elements.statusRule.textContent = enabled ? '运行中' : '已关闭';
   elements.statusDot.classList.toggle('is-ready', enabled);
   elements.statusDot.classList.toggle('is-paused', !enabled);
-  elements.statsText.textContent = `${total} 个回答 · 暂存 ${parked}`;
+  elements.statsText.textContent = `${total} 个回答 · 冻结 ${parked}`;
   elements.totalAnswers.textContent = total;
   elements.parkedAnswers.textContent = parked;
   elements.liveAnswers.textContent = live;

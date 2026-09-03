@@ -1,20 +1,14 @@
-/* Rendering hints for live answer rows. The script only adds these classes to
- * .Question-mainColumn answer List-item nodes it has positively identified. */
-.zhihu-smoother-answer {
-  content-visibility: auto;
-  contain-intrinsic-size: 0 640px;
+/* Zhihu inserts both third-party ads and in-product promotions as direct
+ * .Pc-word-new cards in the answer stream. Keep React's container ownership,
+ * but remove them completely from layout and interaction. */
+.QuestionAnswers-answers .Pc-word-new {
+  display: none !important;
 }
 
-/* Parked rows retain the measured block height but no answer subtree. */
-.zhihu-smoother-placeholder {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  contain: strict;
-  contain-intrinsic-size: 0 640px;
-  overflow-anchor: none;
-  pointer-events: none;
-  user-select: none;
+/* Frozen rows stay in React's DOM ownership. The script writes their measured
+ * block size inline, while Chromium skips layout and paint for the subtree. */
+.zhihu-smoother-answer.zhihu-smoother-parked {
+  content-visibility: hidden;
 }
 
 /* Small, self-contained performance receipt. All selectors are namespaced so
@@ -27,12 +21,12 @@
   width: 230px;
   max-width: calc(100vw - 24px);
   box-sizing: border-box;
-  border: 1px solid rgba(29, 34, 41, 0.16);
+  border: 1px solid #ebebeb;
   border-radius: 3px;
-  background: #f6f1e7;
-  color: #1d2229;
-  box-shadow: 0 9px 28px rgba(29, 34, 41, 0.16);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #ffffff;
+  color: #121212;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
   line-height: 1.35;
   pointer-events: auto;
   opacity: 1;
@@ -68,7 +62,7 @@
   padding: 4px 11px;
   border: 0;
   background: transparent;
-  color: #1d2229;
+  color: #121212;
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -84,8 +78,8 @@
   grid-row: 1 / span 2;
   width: 7px;
   height: 7px;
-  border-right: 1.5px solid #1d2229;
-  border-bottom: 1.5px solid #1d2229;
+  border-right: 1.5px solid #121212;
+  border-bottom: 1.5px solid #121212;
   transform: rotate(45deg) translate(-2px, -2px);
   transition: transform 160ms ease;
   content: "";
@@ -116,7 +110,7 @@
 }
 
 .zhihu-smoother-widget__summary-metric {
-  color: #1d2229;
+  color: #121212;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
   line-height: 17px;
@@ -124,7 +118,7 @@
 
 .zhihu-smoother-widget__summary-label {
   overflow: hidden;
-  color: #5d6670;
+  color: #999999;
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -139,7 +133,7 @@
 }
 
 .zhihu-smoother-page-widget.is-paused .zhihu-smoother-widget__status-dot {
-  background: #5d6670;
+  background: #8590a6;
 }
 
 .zhihu-smoother-widget__details {
@@ -173,7 +167,7 @@
 
 .zhihu-smoother-widget__heading {
   margin: 0;
-  color: #1d2229;
+  color: #121212;
   font-size: 17px;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -194,12 +188,12 @@
 }
 
 .zhihu-smoother-page-widget.is-paused .zhihu-smoother-widget__state {
-  color: #5d6670;
+  color: #8590a6;
 }
 
 .zhihu-smoother-widget__state-note {
   overflow: hidden;
-  color: #5d6670;
+  color: #8590a6;
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -214,7 +208,7 @@
 
 .zhihu-smoother-widget__ratio {
   flex: 0 0 auto;
-  color: #1d2229;
+  color: #121212;
   font-size: 29px;
   font-variant-numeric: tabular-nums;
   font-weight: 750;
@@ -225,7 +219,7 @@
 
 .zhihu-smoother-widget__ratio-label {
   padding-bottom: 2px;
-  color: #5d6670;
+  color: #8590a6;
   font-size: 10px;
   white-space: nowrap;
 }
@@ -237,12 +231,12 @@
   margin: 0 0 13px;
   border: 0;
   border-radius: 0;
-  background: rgba(29, 34, 41, 0.11);
+  background: #f0f0f0;
   accent-color: #0084ff;
 }
 
 .zhihu-smoother-widget__progress::-webkit-progress-bar {
-  background: rgba(29, 34, 41, 0.11);
+  background: #f0f0f0;
 }
 
 .zhihu-smoother-widget__progress::-webkit-progress-value {
@@ -259,7 +253,7 @@
   gap: 5px 10px;
   margin: 0;
   padding-top: 10px;
-  border-top: 1px solid rgba(29, 34, 41, 0.14);
+  border-top: 1px solid #f0f0f0;
 }
 
 .zhihu-smoother-widget__label,
@@ -269,11 +263,11 @@
 }
 
 .zhihu-smoother-widget__label {
-  color: #5d6670;
+  color: #8590a6;
 }
 
 .zhihu-smoother-widget__value {
-  color: #1d2229;
+  color: #121212;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: right;

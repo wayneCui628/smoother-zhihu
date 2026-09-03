@@ -213,7 +213,7 @@
     appendElement(documentObject, toggle, "span", "zhihu-smoother-widget__title", "知乎顺滑器");
     const summary = appendElement(documentObject, toggle, "span", "zhihu-smoother-widget__summary");
     appendElement(documentObject, summary, "strong", "zhihu-smoother-widget__summary-metric", "0 / 0");
-    appendElement(documentObject, summary, "span", "zhihu-smoother-widget__summary-label", "已暂存");
+    appendElement(documentObject, summary, "span", "zhihu-smoother-widget__summary-label", "已冻结");
     appendElement(documentObject, summary, "span", "zhihu-smoother-widget__status-dot");
 
     const details = appendElement(documentObject, root, "section", "zhihu-smoother-widget__details");
@@ -230,27 +230,27 @@
     setAttribute(liveStatus, "aria-live", "polite");
     setAttribute(liveStatus, "aria-atomic", "true");
 
-    appendElement(documentObject, details, "p", "zhihu-smoother-widget__eyebrow", "性能票据");
+    appendElement(documentObject, details, "p", "zhihu-smoother-widget__eyebrow", "优化状态");
     appendElement(documentObject, details, "h2", "zhihu-smoother-widget__heading", "知乎顺滑器");
     const stateLine = appendElement(documentObject, details, "p", "zhihu-smoother-widget__state-line");
     appendElement(documentObject, stateLine, "span", "zhihu-smoother-widget__state", "正在观察");
-    appendElement(documentObject, stateLine, "span", "zhihu-smoother-widget__state-note", "回答窗口");
+    appendElement(documentObject, stateLine, "span", "zhihu-smoother-widget__state-note", "视口缓冲");
 
     const meter = appendElement(documentObject, details, "div", "zhihu-smoother-widget__meter");
     appendElement(documentObject, meter, "strong", "zhihu-smoother-widget__ratio", "0 / 0");
-    appendElement(documentObject, meter, "span", "zhihu-smoother-widget__ratio-label", "已暂存 / 已管理");
+    appendElement(documentObject, meter, "span", "zhihu-smoother-widget__ratio-label", "已冻结 / 已管理");
 
     const progress = appendElement(documentObject, details, "progress", "zhihu-smoother-widget__progress");
     setAttribute(progress, "max", "1");
     setAttribute(progress, "value", "0");
-    setAttribute(progress, "aria-label", "回答暂存进度");
+    setAttribute(progress, "aria-label", "回答冻结进度");
 
     const stats = appendElement(documentObject, details, "dl", "zhihu-smoother-widget__stats");
-    appendElement(documentObject, stats, "dt", "zhihu-smoother-widget__label", "已暂存");
+    appendElement(documentObject, stats, "dt", "zhihu-smoother-widget__label", "已冻结");
     const parkedValue = appendElement(documentObject, stats, "dd", "zhihu-smoother-widget__value", "0");
     appendElement(documentObject, stats, "dt", "zhihu-smoother-widget__label", "已管理");
     const totalValue = appendElement(documentObject, stats, "dd", "zhihu-smoother-widget__value", "0");
-    appendElement(documentObject, stats, "dt", "zhihu-smoother-widget__label", "当前可见");
+    appendElement(documentObject, stats, "dt", "zhihu-smoother-widget__label", "保持显示");
     const liveValue = appendElement(documentObject, stats, "dd", "zhihu-smoother-widget__value", "0");
 
     const refs = {
@@ -468,15 +468,15 @@
         ? "待触发"
         : state === "paused"
           ? `${normalizedStats.total} 条`
-          : "已暂存";
+          : "已冻结";
 
       setText(this.refs.summaryMetric, summaryMetric);
       setText(this.refs.summaryLabel, summaryLabel);
       setText(this.refs.state, stateText);
-      setText(this.refs.stateNote, state === "observing" ? `达到 ${normalizedConfig.minAnswers} 个回答后暂存` : "回答窗口");
-      setText(this.refs.liveStatus, `${stateText}，已暂存 ${normalizedStats.parked} / 已管理 ${normalizedStats.total}，当前可见 ${normalizedStats.live}`);
+      setText(this.refs.stateNote, state === "observing" ? `达到 ${normalizedConfig.minAnswers} 个回答后冻结` : "视口缓冲");
+      setText(this.refs.liveStatus, `${stateText}，已冻结 ${normalizedStats.parked} / 已管理 ${normalizedStats.total}，保持显示 ${normalizedStats.live}`);
       setText(this.refs.ratio, `${normalizedStats.parked} / ${normalizedStats.total}`);
-      setText(this.refs.ratioLabel, "已暂存 / 已管理");
+      setText(this.refs.ratioLabel, "已冻结 / 已管理");
       setText(this.refs.parkedValue, normalizedStats.parked);
       setText(this.refs.totalValue, normalizedStats.total);
       setText(this.refs.liveValue, normalizedStats.live);

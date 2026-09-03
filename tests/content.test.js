@@ -199,3 +199,83 @@ test("controller repositions even when the stats snapshot is unchanged", () => {
   assert.equal(harness.pageWidget.updates.length, 1);
   harness.controller.destroy();
 });
+
+test("waits for stored config before starting or scanning a question page", () => {
+  let storageCallback;
+  let createdWith;
+  const updates = [];
+  const runtimeMessages = createEvent();
+  const storageChanges = createEvent();
+  const virtualizer = {
+    started: false,
+    config: { enabled: false, bufferViewports: 4, minAnswers: 12, showPageWidget: true },
+    getStats() {
+      return { total: 0, parked: 0, live: 0, enabled: this.config.enabled };
+    },
+    getConfig() {
+      return { ...this.config };
+    },
+    updateConfig(config) {
+      updates.push({ ...config });
+      this.config = { ...this.config, ...config };
+      this.started = this.config.enabled;
+      return this.getStats();
+    },
+    rescan() {
+      throw new Error("must not rescan before stored config is ready");
+    },
+    destroy() {},
+  };
+  const virtualizerApi = {
+    normalizeConfig(value) {
+      return {
+        enabled: value.enabled !== false,
+        bufferViewports: Number(value.bufferViewports) || 4,
+        minAnswers: Number(value.minAnswers) || 12,
+        showPageWidget: value.showPageWidget !== false,
+      };
+    },
+    createVirtualizer(options) {
+      createdWith = options;
+      return virtualizer;
+    },
+  };
+  const window = {
+    location: { href: "https://www.zhihu.com/question/slow" },
+    history: {},
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const document = { defaultView: window, hidden: false };
+  const controller = createController({
+    chrome: {
+      runtime: { onMessage: runtimeMessages },
+      storage: {
+        sync: {
+          get(_keys, callback) {
+            storageCallback = callback;
+          },
+          set() {},
+        },
+        onChanged: storageChanges,
+      },
+    },
+    document,
+    window,
+    virtualizerApi,
+  });
+
+  assert.equal(createdWith.autoStart, false);
+  assert.equal(createdWith.config.enabled, false);
+  assert.equal(virtualizer.started, false);
+  assert.equal(updates.length, 0);
+
+  storageCallback({
+    [STORAGE_KEY]: { enabled: false, bufferViewports: 6, minAnswers: 12, showPageWidget: false },
+  });
+
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].enabled, false);
+  assert.equal(virtualizer.started, false);
+  controller.destroy();
+});

@@ -52,8 +52,12 @@
     return normalize(value);
   }
 
-  function readStoredConfig(storage, normalize, onConfig) {
+  function readStoredConfig(storage, normalize, onConfig, fallbackConfig) {
+    const fallback = fallbackConfig && typeof fallbackConfig === "object"
+      ? fallbackConfig
+      : copyConfig({}, normalize);
     if (!storage || typeof storage.get !== "function") {
+      onConfig(fallback);
       return;
     }
 
@@ -64,6 +68,7 @@
       "enabled",
       "bufferViewports",
       "minAnswers",
+      "showPageWidget",
     ];
     let handled = false;
     const finish = (result) => {
@@ -73,23 +78,26 @@
       handled = true;
       const values = result && typeof result === "object" ? result : {};
       const stored = values[STORAGE_KEY] ?? values[LEGACY_STORAGE_KEY] ?? values[SECONDARY_LEGACY_STORAGE_KEY];
-      const candidate = stored && typeof stored === "object"
-        ? stored
-        : {
+      const direct = {
             enabled: values.enabled,
             bufferViewports: values.bufferViewports,
             minAnswers: values.minAnswers,
+            showPageWidget: values.showPageWidget,
           };
+      const hasDirectValue = Object.values(direct).some((entry) => entry !== undefined);
+      const candidate = stored && typeof stored === "object"
+        ? stored
+        : hasDirectValue ? direct : fallback;
       onConfig(copyConfig(candidate, normalize));
     };
 
     try {
       const maybePromise = storage.get(keys, finish);
       if (maybePromise && typeof maybePromise.then === "function") {
-        maybePromise.then(finish).catch(() => undefined);
+        maybePromise.then(finish).catch(() => finish(null));
       }
     } catch (_error) {
-      // Storage is optional at runtime; defaults remain active if unavailable.
+      finish(null);
     }
   }
 
@@ -214,11 +222,16 @@
       return null;
     }
 
+    const requestedConfig = copyConfig(value.config, normalize);
     const virtualizer = value.virtualizer || api.createVirtualizer({
       document: documentObject,
       window: windowObject,
       root: value.root || documentObject,
-      config: value.config || normalize({}),
+      // Reading sync storage is asynchronous in Chromium. Do not scan a huge
+      // question page with default settings before a saved paused state has a
+      // chance to apply.
+      config: { ...requestedConfig, enabled: false },
+      autoStart: false,
     });
     const pageWidget = value.pageWidget || (
       widgetApi && typeof widgetApi.createPageWidget === "function"
@@ -233,6 +246,7 @@
     let widgetRenderKey = null;
     let widgetRefreshTimer = null;
     let widgetInterval = null;
+    let configReady = Boolean(value.virtualizer);
 
     function getWidgetSnapshot() {
       const rawStats = virtualizer && typeof virtualizer.getStats === "function"
@@ -391,6 +405,9 @@
         // a rescan is still useful for newly mounted answer nodes.
       }
       lastHref = href;
+      if (!configReady) {
+        return;
+      }
       const config = typeof virtualizer.getConfig === "function" ? virtualizer.getConfig() : null;
       if (config && config.enabled && !virtualizer.started && typeof virtualizer.start === "function") {
         virtualizer.start();
@@ -405,11 +422,12 @@
     cleanups.push(...attachRouteListeners(windowObject, onRouteChange));
 
     readStoredConfig(storage, normalize, (config) => {
+      configReady = true;
       if (!destroyed && virtualizer && typeof virtualizer.updateConfig === "function") {
         virtualizer.updateConfig(config);
         refreshPageWidget();
       }
-    });
+    }, requestedConfig);
 
     const storageChanged = chromeObject && chromeObject.storage && chromeObject.storage.onChanged;
     if (storageChanged && typeof storageChanged.addListener === "function") {
@@ -438,6 +456,7 @@
           config = direct;
         }
         if (virtualizer && typeof virtualizer.updateConfig === "function") {
+          configReady = true;
           virtualizer.updateConfig(copyConfig(config, normalize));
           refreshPageWidget();
         }
@@ -476,6 +495,7 @@
 
         if (type === "UPDATE_CONFIG") {
           const config = unwrapConfig(message);
+          configReady = true;
           const status = virtualizer && typeof virtualizer.updateConfig === "function"
             ? virtualizer.updateConfig(config)
             : statusWithConfig(virtualizer);

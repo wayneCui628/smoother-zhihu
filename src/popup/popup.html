@@ -9,9 +9,9 @@
   <body>
     <main class="app-shell">
       <header class="masthead">
-        <p class="eyebrow">阅读性能 <span aria-hidden="true">/</span> 01</p>
+        <p class="eyebrow">浏览器扩展 · 性能优化</p>
         <h1>知乎顺滑器</h1>
-        <p class="intro">只优化长回答页，让阅读回到内容本身。</p>
+        <p class="intro">自动冻结远离屏幕的回答，让长页面滚动保持流畅。</p>
       </header>
 
       <section class="panel settings-panel" aria-labelledby="enabled-title">
@@ -42,25 +42,25 @@
       <section class="panel buffer-panel" aria-labelledby="buffer-title">
         <div class="section-heading">
           <div>
-            <h2 id="buffer-title">暂存视口</h2>
-            <p>预留回答窗口，越大越稳妥</p>
+            <h2 id="buffer-title">缓冲范围</h2>
+            <p>视口上下各预留几屏不冻结，越大越稳妥</p>
           </div>
-          <output id="buffer-value" class="value-mark" for="buffer-2 buffer-4 buffer-6">均衡 · 4</output>
+          <output id="buffer-value" class="value-mark" for="buffer-2 buffer-4 buffer-6">均衡 · 上下各 4 屏</output>
         </div>
 
         <fieldset class="buffer-options">
-          <legend class="sr-only">选择暂存视口数量</legend>
+          <legend class="sr-only">选择缓冲范围</legend>
           <label class="buffer-option">
             <input id="buffer-2" type="radio" name="bufferViewports" value="2">
-            <span class="option-face"><strong>精简</strong><small>2 个视口</small></span>
+            <span class="option-face"><strong>精简</strong><small>上下各 2 屏</small></span>
           </label>
           <label class="buffer-option">
             <input id="buffer-4" type="radio" name="bufferViewports" value="4" checked>
-            <span class="option-face"><strong>均衡</strong><small>4 个视口</small></span>
+            <span class="option-face"><strong>均衡</strong><small>上下各 4 屏</small></span>
           </label>
           <label class="buffer-option">
             <input id="buffer-6" type="radio" name="bufferViewports" value="6">
-            <span class="option-face"><strong>稳妥</strong><small>6 个视口</small></span>
+            <span class="option-face"><strong>稳妥</strong><small>上下各 6 屏</small></span>
           </label>
         </fieldset>
       </section>
@@ -80,14 +80,15 @@
             <dd id="total-answers">—</dd>
           </div>
           <div>
-            <dt>已暂存</dt>
+            <dt>已冻结</dt>
             <dd id="parked-answers">—</dd>
           </div>
           <div>
-            <dt>当前可见</dt>
+            <dt>保持显示</dt>
             <dd id="live-answers">—</dd>
           </div>
         </dl>
+        <p class="stat-note">保持显示的数量与回答长短相关，一篇长回答可能占据多屏。</p>
       </section>
 
       <button id="restore-button" class="restore-button" type="button" disabled>
