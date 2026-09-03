@@ -4,13 +4,13 @@ const STORAGE_KEY = 'smootherConfig';
 const DEFAULT_CONFIG = Object.freeze({
   enabled: true,
   showPageWidget: true,
-  bufferViewports: 4,
+  bufferViewports: 2,
   minAnswers: 5,
 });
 const BUFFER_LABELS = Object.freeze({
-  2: '精简',
-  4: '均衡',
-  6: '稳妥',
+  1: '极速',
+  2: '均衡',
+  4: '稳妥',
 });
 
 let currentConfig = { ...DEFAULT_CONFIG };
