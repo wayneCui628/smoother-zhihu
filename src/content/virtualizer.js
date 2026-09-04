@@ -38,8 +38,31 @@
   const SUSPICIOUS_INTRINSIC_HEIGHTS = new Set([640, 672]);
   // A row whose height changed recently (for example a comment section that
   // was just opened) is still settling; parking it right away would freeze a
-  // stale height. Keep it live for this grace period instead.
-  const PIN_HEIGHT_CHANGE_GRACE_MS = 5000;
+  // stale height. Keep it live for this grace period instead. The period is
+  // deliberately short: every deferred row stays fully laid out, and on deep
+  // pages image loads keep refreshing heights, which would otherwise inflate
+  // the live set for the whole 5 seconds.
+  const PIN_HEIGHT_CHANGE_GRACE_MS = 2000;
+  // The scroll handler's parked-row sweep is only a safety net for delayed
+  // IntersectionObserver delivery; the observer itself restores rows a whole
+  // buffer ahead of the viewport. Running the sweep on every scroll frame
+  // costs an O(records) rect read pass, so it is rate limited here.
+  const SCROLL_GUARD_MIN_INTERVAL_MS = 150;
+  // SPA view swaps (the deep-link single-answer view replacing the full
+  // answer list, sort-order changes, ...) can unmount the tracked list root
+  // without any history event. The watchdog heartbeat re-attaches tracking
+  // when the list reappears: fast while tracking is degraded, and a
+  // near-free predicate check once healthy.
+  const WATCHDOG_ACTIVE_INTERVAL_MS = 300;
+  const WATCHDOG_IDLE_INTERVAL_MS = 1000;
+  // Ceiling for the degraded-poll backoff. The heartbeat never fully stops:
+  // in-place SPA view swaps replace the list root without firing any
+  // history event, so a stopped watchdog could only be revived by the very
+  // route events that are unreliable in that flow. The floor bounds the
+  // dead-page cost (a page whose list simply does not exist) to about
+  // twenty-five sub-millisecond scans per minute while keeping unassisted
+  // recovery within one interval.
+  const WATCHDOG_MAX_INTERVAL_MS = 2400;
 
   function clampNumber(value, fallback, limits) {
     if (value === null || value === undefined || typeof value === "boolean" || Array.isArray(value)) {
@@ -624,6 +647,10 @@
       this.resizeObserver = null;
       this.rafId = null;
       this._scrollCheckRafId = null;
+      this._scrollGuardTimer = null;
+      this._lastScrollGuardAt = null;
+      this._watchdogTimer = null;
+      this._watchdogDelay = WATCHDOG_ACTIVE_INTERVAL_MS;
       this._addedNodeQueue = new Set();
       this._addedNodeRafId = null;
       this._addedNodeQueueVersion = 0;
@@ -699,6 +726,8 @@
       this._setupIntersectionObserver();
       this._setupResizeObserver();
       this.updateWindow();
+      this._watchdogDelay = WATCHDOG_ACTIVE_INTERVAL_MS;
+      this._scheduleWatchdog();
       return this;
     }
 
@@ -748,10 +777,23 @@
       if (nextRoot && nextRoot !== this.listRoot) {
         this._cancelAddedNodeQueue();
         this.listRoot = nextRoot;
-        if (this.started && this.observer) {
+        if (this.started) {
           this._disconnectObserver();
-          this._observe();
         }
+      } else if (!nextRoot && this.listRoot && !isAttached(this.listRoot, this.root, this.document)) {
+        // The React view that owned the tracked list was unmounted (for
+        // example the deep-link single-answer view replacing the full answer
+        // list). Release the stale root so tracking can re-attach when the
+        // list view comes back; the watchdog heartbeat drives that recovery.
+        this._cancelAddedNodeQueue();
+        this._disconnectObserver();
+        this.listRoot = null;
+      }
+      if (this.started && this.listRoot && !this.observer) {
+        // Re-attach even when the root did not change: a deep-link page
+        // boots without any list structure at all, so start() left the
+        // observer null and the old reconnect condition never fired.
+        this._observe();
       }
       return this.listRoot;
     }
@@ -821,12 +863,10 @@
       this._optimizeAnswerImages(element);
       if (!record.parked) {
         this._observeLiveRecord(record);
-        // Measure right away: a registered row that knows its height can be
-        // parked as soon as it leaves the buffer, which keeps the set of
-        // live (fully laid out) rows small. Skipping this measurement made
-        // rows stay live much longer and measurably increased native
-        // layout/paint work on deep pages.
-        this._maybeMeasureRecord(record);
+        // Deliberately no geometry read here: getRect/getComputedStyle right
+        // after the class write forces one synchronous layout per row. The
+        // IntersectionObserver entry supplies the rect for free one frame
+        // later, and updateWindow's read-only phase covers the no-IO path.
       }
       return record;
     }
@@ -894,6 +934,12 @@
       if (!this.config.enabled) {
         return this.getStats();
       }
+      // A refresh is most often a route change: the next view may mount at
+      // any moment, so reset the heartbeat to its fastest cadence instead
+      // of leaving it parked at a backoff interval sized for dead pages.
+      this._cancelWatchdog();
+      this._watchdogDelay = WATCHDOG_ACTIVE_INTERVAL_MS;
+      this._scheduleWatchdog();
       this.scan();
       this._setupIntersectionObserver();
       this._setupResizeObserver();
@@ -929,6 +975,22 @@
         if (!this.config.enabled || !this.started || this._parkedCount === 0 || this._scrollCheckRafId !== null) {
           return;
         }
+        // Rate-limited safety net only. The IntersectionObserver (buffered by
+        // rootMargin) restores rows before they reach the viewport, so the
+        // sweep here only covers late observer delivery. An unthrottled sweep
+        // reads one rect per parked record on every scroll frame.
+        if (this._scrollGuardTimer !== null) {
+          // A trailing sweep is already scheduled; it will pick this up.
+          return;
+        }
+        if (this._lastScrollGuardAt !== null) {
+          const elapsed = this._now() - this._lastScrollGuardAt;
+          if (elapsed < SCROLL_GUARD_MIN_INTERVAL_MS) {
+            this._scheduleScrollGuard(SCROLL_GUARD_MIN_INTERVAL_MS - elapsed);
+            return;
+          }
+        }
+        this._lastScrollGuardAt = this._now();
         const callback = () => {
           this._scrollCheckRafId = null;
           if (!this.destroyed && this.started && this.config.enabled) {
@@ -961,7 +1023,92 @@
       }
     }
 
+    _scheduleScrollGuard(delayMs) {
+      if (this._scrollGuardTimer !== null || typeof this._setTimeoutFunction !== "function") {
+        return;
+      }
+      this._scrollGuardTimer = this._setTimeoutFunction.call(this.window, () => {
+        this._scrollGuardTimer = null;
+        if (this.destroyed || !this.started || !this.config.enabled) {
+          return;
+        }
+        this.scheduleUpdate();
+      }, Math.max(0, delayMs));
+    }
+
+    _cancelScrollGuard() {
+      if (this._scrollGuardTimer !== null && typeof this._clearTimeoutFunction === "function") {
+        this._clearTimeoutFunction.call(this.window, this._scrollGuardTimer);
+      }
+      this._scrollGuardTimer = null;
+      this._lastScrollGuardAt = null;
+    }
+
+    /**
+     * Self-healing heartbeat. Route events only fire for history changes,
+     * and a synchronous route callback can observe the pre-swap DOM: Zhihu's
+     * "show all answers" replaces the whole answer view in place. While
+     * tracking is degraded the tick re-scans; once healthy it degrades to a
+     * predicate check that costs a handful of booleans.
+     */
+    _watchdogNeeded() {
+      if (!this.listRoot || !this.observer) {
+        return true;
+      }
+      // Growth inside a live list is MutationObserver territory: once the
+      // root is observed, appended answers are registered event-driven, and
+      // the record count (including pages with fewer answers than
+      // minAnswers) is not a health signal. Comparing it here kept small
+      // pages on the fast poll forever with nothing to heal.
+      return !isAttached(this.listRoot, this.root, this.document);
+    }
+
+    _scheduleWatchdog(delayMs) {
+      if (this._watchdogTimer !== null || this.destroyed) {
+        return;
+      }
+      if (typeof this._setTimeoutFunction !== "function" || !this._mutationObserverConstructor) {
+        return;
+      }
+      this._watchdogTimer = this._setTimeoutFunction.call(this.window, () => {
+        this._watchdogTimer = null;
+        if (this.destroyed || !this.started || !this.config.enabled) {
+          return;
+        }
+        try {
+          if (this._watchdogNeeded()) {
+            this.scan();
+            this.updateWindow();
+          }
+        } catch (_error) {
+          // A failed scan must never take the heartbeat down with it.
+        } finally {
+          if (this._watchdogNeeded()) {
+            // Exponential backoff while degraded (300 -> 600 -> 1200 ->
+            // 2400 cap): rescanning cannot conjure up a list that the page
+            // simply does not have (deep-link view, empty or error pages).
+            this._watchdogDelay = Math.min(
+              this._watchdogDelay * 2,
+              WATCHDOG_MAX_INTERVAL_MS,
+            );
+            this._scheduleWatchdog(this._watchdogDelay);
+          } else {
+            this._watchdogDelay = WATCHDOG_ACTIVE_INTERVAL_MS;
+            this._scheduleWatchdog(WATCHDOG_IDLE_INTERVAL_MS);
+          }
+        }
+      }, typeof delayMs === "number" ? delayMs : WATCHDOG_ACTIVE_INTERVAL_MS);
+    }
+
+    _cancelWatchdog() {
+      if (this._watchdogTimer !== null && typeof this._clearTimeoutFunction === "function") {
+        this._clearTimeoutFunction.call(this.window, this._watchdogTimer);
+      }
+      this._watchdogTimer = null;
+    }
+
     cancelScheduledUpdate() {
+      this._cancelScrollGuard();
       if (this._scrollCheckRafId !== null) {
         if (typeof this._cancelRaf === "function") {
           this._cancelRaf.call(this.window, this._scrollCheckRafId);
@@ -1018,21 +1165,24 @@
           return;
         }
 
-        const next = this._addedNodeQueue.values().next();
-        if (next.done) {
-          return;
+        // Drain the whole mutation batch in one frame. Zhihu appends answers
+        // in bursts, and stretching registration across one frame per row
+        // keeps freshly appended rows folded at the CSS seed height (420px)
+        // for a long time on a saturated main thread. A shortened document
+        // keeps Zhihu's infinite-scroll sentinel inside its trigger range,
+        // which fires load after load — the deep-page "loading storm".
+        const batch = Array.from(this._addedNodeQueue);
+        this._addedNodeQueue.clear();
+        for (const node of batch) {
+          this._handleAddedNode(node);
         }
-        this._addedNodeQueue.delete(next.value);
-        this._handleAddedNode(next.value);
 
         if (queueVersion !== this._addedNodeQueueVersion) {
           return;
         }
-        if (this._addedNodeQueue.size > 0) {
-          this._scheduleAddedNodeQueue();
-        } else if (this.recordsById.size < this.config.minAnswers) {
+        if (this.recordsById.size < this.config.minAnswers) {
           // Preserve the activation threshold after the whole mutation batch
-          // has been handled, without restoring once per added node.
+          // has been handled.
           this.restoreAll();
         }
       };
@@ -1060,43 +1210,57 @@
         return this.getStats();
       }
 
-      const viewportHeight = this._viewportHeight();
-      const buffer = viewportHeight * this.config.bufferViewports;
-      for (const record of Array.from(this.recordsById.values())) {
-        this._reconcileRecord(record, viewportHeight, buffer);
-      }
-
+      this._reconcileRecords(Array.from(this.recordsById.values()));
       return this.getStats();
     }
 
-    _reconcileRecord(record, viewportHeight, buffer) {
-      if (record.parked) {
-        const parkedRect = getRect(record.element);
-        if (parkedRect && this._isNearViewport(parkedRect, viewportHeight, buffer)) {
-          this._restoreRecord(record);
+    /**
+     * Read/write-separated reconcile over a record subset. Phase 1 reads all
+     * geometry while the layout is clean; phase 2 applies every style write
+     * back to back. Interleaving a rect read with a style write per record
+     * forces one synchronous layout per record, which is a multi-hundred-ms
+     * storm on a 100+ answer page.
+     */
+    _reconcileRecords(records) {
+      const viewportHeight = this._viewportHeight();
+      const buffer = viewportHeight * this.config.bufferViewports;
+      const parkCandidates = [];
+      const restores = [];
+
+      for (const record of records) {
+        if (record.parked) {
+          const parkedRect = getRect(record.element);
+          if (parkedRect && this._isNearViewport(parkedRect, viewportHeight, buffer)) {
+            restores.push(record);
+          }
+          continue;
         }
-        return;
+        if (!isAttached(record.element, this.listRoot || this.root, this.document)) {
+          continue;
+        }
+        const graceRemaining = this._pinGraceRemainingMs(record);
+        if (graceRemaining > 0) {
+          this._deferForGrace(record, graceRemaining);
+          continue;
+        }
+        if (this._isPinnedRecord(record)) {
+          continue;
+        }
+        const rect = getRect(record.element);
+        if (rect && !this._isNearViewport(rect, viewportHeight, buffer)) {
+          parkCandidates.push([record, rect]);
+        } else if (rect && this._isNearViewport(rect, viewportHeight, 0)) {
+          // Near-viewport measurements only mutate cached record state, never
+          // element styles, so they stay in the read phase.
+          this._maybeMeasureRecord(record, rect);
+        }
       }
 
-      if (!isAttached(record.element, this.listRoot || this.root, this.document)) {
-        return;
+      for (const record of restores) {
+        this._restoreRecord(record);
       }
-
-      const graceRemaining = this._pinGraceRemainingMs(record);
-      if (graceRemaining > 0) {
-        this._deferForGrace(record, graceRemaining);
-        return;
-      }
-
-      if (this._isPinnedRecord(record)) {
-        return;
-      }
-
-      const rect = getRect(record.element);
-      if (rect && !this._isNearViewport(rect, viewportHeight, buffer)) {
+      for (const [record, rect] of parkCandidates) {
         this._parkRecord(record, rect);
-      } else if (rect && this._isNearViewport(rect, viewportHeight, 0)) {
-        this._maybeMeasureRecord(record, rect);
       }
     }
 
@@ -1314,12 +1478,9 @@
         // Reconcile only the records that were actually deferred: a full
         // updateWindow() sweep reads geometry for every managed answer after
         // each grace expiry and re-creates the layout storm.
-        const viewportHeight = this._viewportHeight();
-        const buffer = viewportHeight * this.config.bufferViewports;
-        for (const record of Array.from(this._pinRecheckRecords)) {
-          this._pinRecheckRecords.delete(record);
-          this._reconcileRecord(record, viewportHeight, buffer);
-        }
+        const deferred = Array.from(this._pinRecheckRecords);
+        this._pinRecheckRecords.clear();
+        this._reconcileRecords(deferred);
       }, fireDelay);
     }
 
@@ -1562,12 +1723,7 @@
     }
 
     _observe() {
-      if (!this._mutationObserverConstructor || !this.started) {
-        return;
-      }
-
-      const target = this.listRoot || this._ensureListRoot();
-      if (!target || typeof this._mutationObserverConstructor !== "function") {
+      if (!this._mutationObserverConstructor || !this.started || this.observer || !this.listRoot) {
         return;
       }
 
@@ -1577,7 +1733,7 @@
         });
         // Deliberately omit subtree: only direct list children can add/remove
         // an answer, promotion, or the loading sentinel.
-        this.observer.observe(target, { childList: true });
+        this.observer.observe(this.listRoot, { childList: true });
       } catch (_error) {
         this.observer = null;
       }
@@ -1839,6 +1995,7 @@
       this.cancelScheduledUpdate();
       this._clearPinRecheck();
       this._cancelRestoreMeasures();
+      this._cancelWatchdog();
       this._disconnectObserver();
       this._disconnectIntersectionObserver();
       this._disconnectResizeObserver();

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "知乎顺滑器",
   "short_name": "知乎顺滑器",
-  "version": "0.3.19",
+  "version": "0.3.20",
   "description": "自动暂存远离视口的知乎回答，减少超长问题页的渲染压力。",
   "minimum_chrome_version": "105",
   "permissions": [

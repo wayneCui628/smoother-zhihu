@@ -47,6 +47,20 @@ class FakeElement {
     return this.parentNode && this.parentNode.nodeType === 1 ? this.parentNode : null;
   }
 
+  // Mirrors the real DOM: attached means reachable from the document root.
+  // The virtualizer's isAttached() relies on this instead of falling back to
+  // a parentNode truthiness check, which misreports a detached subtree.
+  get isConnected() {
+    let current = this;
+    while (current) {
+      if (current.nodeType === 9) {
+        return true;
+      }
+      current = current.parentNode;
+    }
+    return false;
+  }
+
   get className() {
     return this.classList.toString();
   }
@@ -253,6 +267,10 @@ function createFakeTimers() {
       const pending = [...timers.values()];
       timers.clear();
       for (const { callback } of pending) callback();
+    },
+    nextDelay() {
+      const first = timers.values().next().value;
+      return first ? first.delay : null;
     },
   };
 }
@@ -519,7 +537,7 @@ test("mutation observer processes only direct added nodes and keeps the sentinel
   virtualizer.destroy();
 });
 
-test("queues a mutation batch and registers at most one added node per frame", () => {
+test("registers a whole mutation batch in a single frame to keep the document tall", () => {
   FakeMutationObserver.instances.length = 0;
   const page = makeQuestionPage([makeAnswer({ top: 20, bottom: 240, height: 220 })]);
   const virtualizer = new AnswerVirtualizer({
@@ -538,18 +556,16 @@ test("queues a mutation batch and registers at most one added node per frame", (
   added.forEach((row) => page.listRoot.insertBefore(row, page.sentinel));
   observer.trigger([{ type: "childList", target: page.listRoot, addedNodes: [...added, added[0]] }]);
 
+  // Zhihu's infinite-scroll sentinel measures its distance through the live
+  // document height. Rows stay folded at the CSS seed height until they are
+  // registered, so stretching one registration per frame keeps the document
+  // artificially short and re-triggers loading. The whole batch must settle
+  // within a single frame (duplicate queue entries deduped).
   assert.equal(virtualizer.getStats().total, 1);
   assert.equal(page.windowObject.pendingAnimationFrameCount(), 1);
   page.windowObject.flushAnimationFrame();
-  assert.equal(virtualizer.getStats().total, 2);
-  assert.equal(virtualizer.records.get(added[1]), undefined);
-  assert.equal(page.windowObject.pendingAnimationFrameCount(), 1);
-  page.windowObject.flushAnimationFrame();
-  assert.equal(virtualizer.getStats().total, 3);
-  assert.equal(virtualizer.records.get(added[2]), undefined);
-  assert.equal(page.windowObject.pendingAnimationFrameCount(), 1);
-  page.windowObject.flushAnimationFrame();
   assert.equal(virtualizer.getStats().total, 4);
+  assert.equal(virtualizer.records.get(added[1]).id, "item:batch-2");
   assert.equal(page.windowObject.pendingAnimationFrameCount(), 0);
   virtualizer.destroy();
 });
@@ -1155,7 +1171,7 @@ test("restores a parked row and refreshes its height two frames later", () => {
   virtualizer.destroy();
 });
 
-test("registers a new answer and measures it synchronously", () => {
+test("registers a new answer write-only and defers its measurement to reconcile", () => {
   FakeMutationObserver.instances.length = 0;
   const near = makeAnswer({ top: 20, bottom: 240, height: 220 }, JSON.stringify({ type: "answer", itemId: "near" }));
   const page = makeQuestionPage([near]);
@@ -1175,9 +1191,50 @@ test("registers a new answer and measures it synchronously", () => {
 
   const record = virtualizer.records.get(added);
   assert.ok(record);
-  // Registration measures right away: a row that knows its height can be
-  // parked as soon as it leaves the buffer, keeping live rows scarce.
+  // Registration performs no geometry read: a getRect right after the class
+  // write forces a synchronous layout per appended row. Geometry arrives
+  // from the next reconcile (IntersectionObserver entries in the browser,
+  // updateWindow on the test/no-observer path).
+  assert.equal(record.lastMeasuredHeight, 0);
+  virtualizer.updateWindow();
   assert.equal(record.lastMeasuredHeight, 220);
+  virtualizer.destroy();
+});
+
+test("registering an appended batch performs zero forced-layout geometry reads", () => {
+  FakeMutationObserver.instances.length = 0;
+  const page = makeQuestionPage([makeAnswer({ top: 20, bottom: 240, height: 220 })]);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    MutationObserver: FakeMutationObserver,
+    config: { enabled: true, minAnswers: 1 },
+  });
+  virtualizer.start();
+  const observer = FakeMutationObserver.instances.at(-1);
+
+  // Any geometry read during the registration frame is a forced layout after
+  // the class/style writes. Count them: the budget for the whole batch is 0.
+  let rectReads = 0;
+  const added = [];
+  for (let index = 0; index < 5; index += 1) {
+    const row = makeAnswer(
+      { top: 300 + index * 250, bottom: 520 + index * 250, height: 220 },
+      JSON.stringify({ type: "answer", itemId: `storm-${index}` }),
+    );
+    const originalRect = row.getBoundingClientRect.bind(row);
+    row.getBoundingClientRect = () => {
+      rectReads += 1;
+      return originalRect();
+    };
+    added.push(row);
+    page.listRoot.insertBefore(row, page.sentinel);
+  }
+  observer.trigger([{ type: "childList", target: page.listRoot, addedNodes: added }]);
+  page.windowObject.flushAnimationFrame();
+
+  assert.equal(virtualizer.getStats().total, 6);
+  assert.equal(rectReads, 0);
   virtualizer.destroy();
 });
 
@@ -1264,6 +1321,227 @@ test("_ensureListRoot reconnects observer when answer list container changes", (
   virtualizer.destroy();
 });
 
+test("deep-link boot without a list attaches once the answer list appears", () => {
+  FakeMutationObserver.instances.length = 0;
+  // A deep-linked answer page has no .QuestionAnswers-answers list at boot:
+  // start() finds no list root and no observer.
+  const documentObject = new FakeDocument();
+  const windowObject = fakeWindow();
+  documentObject.defaultView = windowObject;
+  const virtualizer = new AnswerVirtualizer({
+    document: documentObject,
+    window: windowObject,
+    MutationObserver: FakeMutationObserver,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+  virtualizer.start();
+  assert.equal(virtualizer.listRoot, null);
+  assert.equal(virtualizer.observer, null);
+
+  // The user clicks "show all answers": the full list view mounts.
+  const page = makeQuestionPage([
+    makeAnswer({ top: 20, bottom: 240, height: 220 }, JSON.stringify({ type: "answer", itemId: "deep-1" })),
+    makeAnswer({ top: 250, bottom: 470, height: 220 }, JSON.stringify({ type: "answer", itemId: "deep-2" })),
+  ]);
+  documentObject.documentElement.appendChild(page.answers);
+  virtualizer.root = documentObject;
+  virtualizer.scan();
+
+  assert.equal(virtualizer.listRoot, page.listRoot);
+  assert.ok(virtualizer.observer);
+  assert.equal(virtualizer.observer.target, page.listRoot);
+  assert.equal(virtualizer.getStats().total, 2);
+  virtualizer.destroy();
+});
+
+test("watchdog heartbeat re-attaches tracking after the tracked list is unmounted", () => {
+  FakeMutationObserver.instances.length = 0;
+  const timers = createFakeTimers();
+  const answer = makeAnswer({ top: 20, bottom: 240, height: 220 }, JSON.stringify({ type: "answer", itemId: "watch-1" }));
+  const page = makeQuestionPage([answer]);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    MutationObserver: FakeMutationObserver,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+  virtualizer.start();
+  assert.equal(virtualizer.getStats().total, 1);
+  assert.ok(virtualizer.observer);
+
+  // The SPA swaps to the single-answer deep-link view: the whole list view
+  // (including the tracked list root) leaves the DOM.
+  page.documentObject.documentElement.removeChild(page.answers);
+  virtualizer.scan();
+  assert.equal(virtualizer.listRoot, null);
+  assert.equal(virtualizer.observer, null);
+
+  // The user clicks "show all answers": a fresh list view mounts elsewhere.
+  const nextPage = makeQuestionPage([
+    makeAnswer({ top: 20, bottom: 240, height: 220 }, JSON.stringify({ type: "answer", itemId: "watch-2" })),
+    makeAnswer({ top: 250, bottom: 470, height: 220 }, JSON.stringify({ type: "answer", itemId: "watch-3" })),
+  ]);
+  page.documentObject.documentElement.appendChild(nextPage.answers);
+
+  // No route event fires (in-place view swap); the heartbeat alone must
+  // re-attach tracking to the new list.
+  timers.runAll();
+
+  assert.equal(virtualizer.listRoot, nextPage.listRoot);
+  assert.ok(virtualizer.observer);
+  assert.equal(virtualizer.observer.target, nextPage.listRoot);
+  assert.equal(virtualizer.getStats().total, 2);
+  virtualizer.destroy();
+});
+
+test("watchdog heartbeat idles at the slow interval once tracking is healthy", () => {
+  FakeMutationObserver.instances.length = 0;
+  const timers = createFakeTimers();
+  const answer = makeAnswer({ top: 20, bottom: 240, height: 220 }, JSON.stringify({ type: "answer", itemId: "idle-1" }));
+  const page = makeQuestionPage([answer]);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    MutationObserver: FakeMutationObserver,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+  virtualizer.start();
+
+  // Healthy state: no scan is pending (the heartbeat only schedules itself
+  // when tracking is degraded) and one idle tick is pending.
+  virtualizer._scheduleWatchdog();
+  assert.equal(timers.pendingCount(), 1);
+
+  // Running the healthy tick must not trigger a rescan: the root, observer,
+  // and record set are all intact.
+  let scanCalls = 0;
+  virtualizer.scan = () => {
+    scanCalls += 1;
+    throw new Error("healthy heartbeat must not rescan");
+  };
+  timers.runAll();
+  assert.equal(scanCalls, 0);
+
+  // And the heartbeat re-armed itself for the idle interval.
+  assert.equal(timers.pendingCount(), 1);
+  virtualizer.destroy();
+  assert.equal(timers.pendingCount(), 0);
+});
+
+test("pages below minAnswers settle into the idle heartbeat instead of polling forever", () => {
+  FakeMutationObserver.instances.length = 0;
+  const timers = createFakeTimers();
+  // Production default minAnswers (5) on a 3-answer page: the list root is
+  // present and observed, so tracking is healthy even though the record
+  // count never crosses the activation threshold. Growth is the Mutation
+  // Observer's job; the count itself must not keep the heartbeat fast.
+  const rows = [0, 1, 2].map((index) => makeAnswer(
+    { top: 20 + index * 250, bottom: 240 + index * 250, height: 220 },
+    JSON.stringify({ type: "answer", itemId: `small-${index}` }),
+  ));
+  const page = makeQuestionPage(rows);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    MutationObserver: FakeMutationObserver,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    config: { enabled: true, minAnswers: 5, bufferViewports: 1 },
+  });
+  virtualizer.start();
+  assert.equal(virtualizer.getStats().total, 3);
+
+  let scanCalls = 0;
+  virtualizer.scan = () => {
+    scanCalls += 1;
+    throw new Error("a below-threshold but attached page must not be rescanned");
+  };
+  for (let tick = 0; tick < 5; tick += 1) {
+    timers.runAll();
+  }
+  assert.equal(scanCalls, 0);
+  assert.equal(timers.nextDelay(), 1000);
+  virtualizer.destroy();
+});
+
+test("watchdog backs off while no list exists and recovers when one mounts", () => {
+  FakeMutationObserver.instances.length = 0;
+  const timers = createFakeTimers();
+  const documentObject = new FakeDocument();
+  const windowObject = fakeWindow();
+  documentObject.defaultView = windowObject;
+  const virtualizer = new AnswerVirtualizer({
+    document: documentObject,
+    window: windowObject,
+    MutationObserver: FakeMutationObserver,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    config: { enabled: true, minAnswers: 5, bufferViewports: 1 },
+  });
+  virtualizer.start();
+
+  // No list at all (deep-link view): each failed tick doubles the delay,
+  // capped at 2400ms. The heartbeat never stops, so recovery without route
+  // events stays bounded by one interval.
+  assert.equal(timers.nextDelay(), 300);
+  timers.runAll();
+  assert.equal(timers.nextDelay(), 600);
+  timers.runAll();
+  assert.equal(timers.nextDelay(), 1200);
+  timers.runAll();
+  assert.equal(timers.nextDelay(), 2400);
+  timers.runAll();
+  assert.equal(timers.nextDelay(), 2400);
+
+  // The list view finally mounts: the next backed-off tick attaches it and
+  // the heartbeat drops back to the idle cadence.
+  const page = makeQuestionPage([
+    makeAnswer({ top: 20, bottom: 240, height: 220 }, JSON.stringify({ type: "answer", itemId: "backoff-1" })),
+    makeAnswer({ top: 250, bottom: 470, height: 220 }, JSON.stringify({ type: "answer", itemId: "backoff-2" })),
+  ]);
+  documentObject.documentElement.appendChild(page.answers);
+  timers.runAll();
+
+  assert.equal(virtualizer.listRoot, page.listRoot);
+  assert.ok(virtualizer.observer);
+  assert.equal(virtualizer.observer.target, page.listRoot);
+  assert.equal(timers.nextDelay(), 1000);
+  virtualizer.destroy();
+});
+
+test("refresh resets a backed-off watchdog to its fastest cadence", () => {
+  FakeMutationObserver.instances.length = 0;
+  const timers = createFakeTimers();
+  const documentObject = new FakeDocument();
+  const windowObject = fakeWindow();
+  documentObject.defaultView = windowObject;
+  const virtualizer = new AnswerVirtualizer({
+    document: documentObject,
+    window: windowObject,
+    MutationObserver: FakeMutationObserver,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    config: { enabled: true, minAnswers: 5, bufferViewports: 1 },
+  });
+  virtualizer.start();
+
+  // Burn the watchdog down to the capped backoff interval.
+  for (let tick = 0; tick < 4; tick += 1) {
+    timers.runAll();
+  }
+  assert.equal(timers.nextDelay(), 2400);
+
+  // A route change (content.js calls rescan/refresh) must drop the stale
+  // backoff immediately: the next view can mount at any moment.
+  virtualizer.refresh();
+  assert.equal(timers.nextDelay(), 300);
+  virtualizer.destroy();
+});
+
 test("optimizes images within answer element for asynchronous decoding", () => {
   const answer = makeAnswer(
     { top: 0, bottom: 120, height: 120 },
@@ -1320,6 +1598,61 @@ test("_checkInViewportParked unparks a record when it enters the viewport on scr
   assert.equal(record.parked, false);
   assert.equal(record.element.style.contentVisibility, "");
 
+  virtualizer.destroy();
+});
+
+test("scroll guard sweep is rate limited while the IntersectionObserver is active", () => {
+  FakeIntersectionObserver.instances.length = 0;
+  const clock = { value: 1000, now: () => clock.value };
+  const timers = createFakeTimers();
+  const rows = [makeAnswer({ top: 20, bottom: 240, height: 220 }, JSON.stringify({ type: "answer", itemId: "guard-0" }))];
+  for (let index = 1; index < 6; index += 1) {
+    rows.push(makeAnswer(
+      { top: 1000 + index * 100, bottom: 1220 + index * 100, height: 220 },
+      JSON.stringify({ type: "answer", itemId: `guard-${index}` }),
+    ));
+  }
+  const page = makeQuestionPage(rows);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    IntersectionObserver: FakeIntersectionObserver,
+    now: clock.now,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+  virtualizer.start();
+  assert.equal(virtualizer.getStats().parked, 5);
+
+  let sweeps = 0;
+  const originalSweep = virtualizer._checkInViewportParked.bind(virtualizer);
+  virtualizer._checkInViewportParked = () => {
+    sweeps += 1;
+    return originalSweep();
+  };
+
+  // Ten scroll events within the same window: one immediate sweep plus at
+  // most one trailing scheduled sweep, never one per event.
+  for (let index = 0; index < 10; index += 1) {
+    clock.value += 10;
+    page.windowObject.trigger("scroll");
+    page.windowObject.flushAnimationFrame();
+  }
+  assert.equal(sweeps, 1);
+  assert.equal(timers.pendingCount(), 1);
+
+  clock.value += 200;
+  timers.runAll();
+  page.windowObject.flushAnimationFrame();
+  assert.equal(sweeps, 2);
+  assert.equal(timers.pendingCount(), 0);
+
+  // After the interval has fully elapsed, a fresh scroll sweeps immediately.
+  clock.value += 200;
+  page.windowObject.trigger("scroll");
+  page.windowObject.flushAnimationFrame();
+  assert.equal(sweeps, 3);
   virtualizer.destroy();
 });
 
