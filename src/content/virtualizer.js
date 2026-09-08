@@ -48,6 +48,12 @@
   // buffer ahead of the viewport. Running the sweep on every scroll frame
   // costs an O(records) rect read pass, so it is rate limited here.
   const SCROLL_GUARD_MIN_INTERVAL_MS = 150;
+  // Rebuilding the IntersectionObserver on resize disconnects it and
+  // re-observes every record (an O(records) pass through the browser's
+  // observer machinery). Window drag-resize fires dozens of events per
+  // second, so the rebuild is debounced here; the old rootMargin stays
+  // merely 150ms stale, well inside the restore buffer.
+  const RESIZE_REBUILD_DEBOUNCE_MS = 150;
   // SPA view swaps (the deep-link single-answer view replacing the full
   // answer list, sort-order changes, ...) can unmount the tracked list root
   // without any history event. The watchdog heartbeat re-attaches tracking
@@ -649,6 +655,7 @@
       this._scrollCheckRafId = null;
       this._scrollGuardTimer = null;
       this._lastScrollGuardAt = null;
+      this._resizeDebounceTimer = null;
       this._watchdogTimer = null;
       this._watchdogDelay = WATCHDOG_ACTIVE_INTERVAL_MS;
       this._addedNodeQueue = new Set();
@@ -838,6 +845,22 @@
       const id = this._answerId(element);
       let record = this.recordsById.get(id);
       if (!record) {
+        // The same node can change identity: while hydrating, Zhihu briefly
+        // renders a malformed data-zop (or none), so the record was keyed by
+        // the "name:x"/"anonymous:N" fallback before the real itemId lands.
+        // Scan keeps records whose element is attached, so the stale record
+        // would linger forever and fight the new one over parking styles and
+        // stats. Migrate it in place: heights, observer state, and parking
+        // survive the id change untouched.
+        const existing = this.records.get(element);
+        if (existing && existing.id !== id) {
+          this.recordsById.delete(existing.id);
+          existing.id = id;
+          this.recordsById.set(id, existing);
+          record = existing;
+        }
+      }
+      if (!record) {
         record = this._createRecord(element, id);
         this.recordsById.set(id, record);
         this.records.set(element, record);
@@ -847,14 +870,23 @@
         this.records.delete(previousElement);
 
         // React can replace an AnswerItem node while the answer identity stays
-        // the same. Release any parking styles on the old node, then rebind
-        // the single record to the new node. Never remove either React node:
+        // the same. Release any parking styles on the old node, then rebind the
+        // single record to the new node. Never remove either React node:
         // React owns their lifecycle and will reconcile the old one itself.
         if (record.parked) {
           this._restoreParkedStyles(record, previousElement);
           this._setParked(record, false);
           record.parkedInlineStyles = null;
         }
+
+        // The incoming node may itself be tracked under a drifted id (see
+        // above). Rebinding below would orphan that record behind the
+        // element->record map, so retire it first.
+        const stale = this.records.get(element);
+        if (stale && stale !== record) {
+          this._deleteRecord(stale);
+        }
+
         record.element = element;
         this.records.set(element, record);
       }
@@ -1962,11 +1994,37 @@
     }
 
     _handleViewportResize() {
+      // Without clearTimeout a pending rebuild could never be cancelled, so an
+      // incomplete timer pair must fall back to applying synchronously.
+      if (typeof this._setTimeoutFunction !== "function" || typeof this._clearTimeoutFunction !== "function") {
+        this._applyViewportResize();
+        return;
+      }
+      if (this._resizeDebounceTimer !== null) {
+        this._clearTimeoutFunction.call(this.window, this._resizeDebounceTimer);
+      }
+      this._resizeDebounceTimer = this._setTimeoutFunction.call(this.window, () => {
+        this._resizeDebounceTimer = null;
+        if (this.destroyed || !this.started) {
+          return;
+        }
+        this._applyViewportResize();
+      }, RESIZE_REBUILD_DEBOUNCE_MS);
+    }
+
+    _applyViewportResize() {
       if (this.intersectionObserver) {
         this._setupIntersectionObserver();
       } else {
         this.scheduleUpdate();
       }
+    }
+
+    _cancelResizeDebounce() {
+      if (this._resizeDebounceTimer !== null && typeof this._clearTimeoutFunction === "function") {
+        this._clearTimeoutFunction.call(this.window, this._resizeDebounceTimer);
+      }
+      this._resizeDebounceTimer = null;
     }
 
     _disconnectObserver() {
@@ -1993,6 +2051,7 @@
     _deactivate() {
       this._cancelAddedNodeQueue();
       this.cancelScheduledUpdate();
+      this._cancelResizeDebounce();
       this._clearPinRecheck();
       this._cancelRestoreMeasures();
       this._cancelWatchdog();

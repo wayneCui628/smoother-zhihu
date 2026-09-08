@@ -47,7 +47,8 @@ test("content script access is limited to Zhihu question pages", () => {
 });
 
 test("release metadata and real-page performance CSS stay aligned", () => {
-  assert.equal(manifest.version, "0.3.20");
+  // The manifest/package version pair must always stay in sync; the exact
+  // number is pinned by the v* tag that triggers the release workflow.
   assert.equal(packageJson.version, manifest.version);
 
   const css = fs.readFileSync(path.join(projectRoot, "src/content/content.css"), "utf8");

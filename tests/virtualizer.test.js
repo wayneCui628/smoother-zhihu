@@ -1656,6 +1656,163 @@ test("scroll guard sweep is rate limited while the IntersectionObserver is activ
   virtualizer.destroy();
 });
 
+test("viewport resize rebuilds the IntersectionObserver once after a debounce", () => {
+  FakeIntersectionObserver.instances.length = 0;
+  const timers = createFakeTimers();
+  const rows = [makeAnswer({ top: 20, bottom: 240, height: 220 }, JSON.stringify({ type: "answer", itemId: "resize-0" }))];
+  for (let index = 1; index < 6; index += 1) {
+    rows.push(makeAnswer(
+      { top: 1000 + index * 100, bottom: 1220 + index * 100, height: 220 },
+      JSON.stringify({ type: "answer", itemId: `resize-${index}` }),
+    ));
+  }
+  const page = makeQuestionPage(rows);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    IntersectionObserver: FakeIntersectionObserver,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+  virtualizer.start();
+  const initialCount = FakeIntersectionObserver.instances.length;
+  assert.ok(initialCount >= 1, "start() must set up the initial IntersectionObserver");
+
+  // A drag-resize storm must schedule one rebuild, not one per event.
+  const pendingBefore = timers.pendingCount();
+  for (let index = 0; index < 10; index += 1) {
+    page.windowObject.trigger("resize");
+  }
+  assert.equal(FakeIntersectionObserver.instances.length, initialCount);
+  assert.equal(timers.pendingCount(), pendingBefore + 1);
+
+  timers.runAll();
+  assert.equal(FakeIntersectionObserver.instances.length, initialCount + 1);
+  assert.equal(FakeIntersectionObserver.instances[initialCount - 1].disconnected, true);
+
+  // destroy() cancels a pending rebuild instead of letting it fire later.
+  const pendingAfterRebuild = timers.pendingCount();
+  page.windowObject.trigger("resize");
+  assert.equal(timers.pendingCount(), pendingAfterRebuild + 1);
+  virtualizer.destroy();
+  assert.equal(timers.pendingCount(), pendingAfterRebuild);
+  timers.runAll();
+  assert.equal(FakeIntersectionObserver.instances.length, initialCount + 1);
+});
+
+test("viewport resize applies synchronously when no timer source is available", () => {
+  FakeIntersectionObserver.instances.length = 0;
+  const rows = [makeAnswer({ top: 20, bottom: 240, height: 220 }, JSON.stringify({ type: "answer", itemId: "resize-sync" }))];
+  const page = makeQuestionPage(rows);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    IntersectionObserver: FakeIntersectionObserver,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+  virtualizer.start();
+  const initialCount = FakeIntersectionObserver.instances.length;
+  assert.ok(initialCount >= 1);
+
+  // No timer source (exotic embedder): the rebuild must still happen, just
+  // synchronously instead of after the debounce window.
+  virtualizer._setTimeoutFunction = null;
+  page.windowObject.trigger("resize");
+  assert.equal(FakeIntersectionObserver.instances.length, initialCount + 1);
+  virtualizer.destroy();
+});
+
+test("viewport resize applies synchronously when the timer pair is incomplete", () => {
+  FakeIntersectionObserver.instances.length = 0;
+  const timers = createFakeTimers();
+  const rows = [makeAnswer({ top: 20, bottom: 240, height: 220 }, JSON.stringify({ type: "answer", itemId: "resize-pair-0" }))];
+  const page = makeQuestionPage(rows);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    IntersectionObserver: FakeIntersectionObserver,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+  virtualizer.start();
+  const initialCount = FakeIntersectionObserver.instances.length;
+  const pendingBefore = timers.pendingCount();
+  assert.ok(initialCount >= 1);
+
+  // setTimeout present but clearTimeout missing: the rebuild must not be
+  // scheduled (it could never be cancelled), it must apply synchronously.
+  virtualizer._clearTimeoutFunction = null;
+  page.windowObject.trigger("resize");
+  assert.equal(FakeIntersectionObserver.instances.length, initialCount + 1);
+  assert.equal(timers.pendingCount(), pendingBefore);
+  virtualizer.destroy();
+});
+
+test("identity drift on a hydrated node migrates the record in place", () => {
+  // First paint: malformed data-zop without itemId, so the record is keyed
+  // by the anonymous fallback id.
+  const answer = makeAnswer({ top: 20, bottom: 240, height: 220 });
+  const page = makeQuestionPage([answer]);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+  virtualizer.start();
+  assert.equal(virtualizer.getStats().total, 1);
+  const [originalRecord] = [...virtualizer.recordsById.values()];
+  assert.match(originalRecord.id, /^anonymous:/);
+
+  // Hydration lands the real itemId on the very same node.
+  answer.children[0].setAttribute("data-zop", JSON.stringify({ type: "answer", itemId: "drift-1" }));
+  virtualizer.scan();
+
+  assert.equal(virtualizer.getStats().total, 1, "identity drift must not create a ghost record");
+  assert.equal(virtualizer.recordsById.size, 1);
+  assert.equal(virtualizer.records.size, 1);
+  const [migratedRecord] = [...virtualizer.recordsById.values()];
+  assert.equal(migratedRecord, originalRecord, "the record must be migrated in place");
+  assert.equal(migratedRecord.id, "item:drift-1");
+  assert.equal(migratedRecord.element, answer);
+  virtualizer.destroy();
+});
+
+test("rebinding a replaced node retires the stale record already mapped to it", () => {
+  const first = makeAnswer({ top: 20, bottom: 240, height: 220 }, JSON.stringify({ type: "answer", itemId: "keep-1" }));
+  const page = makeQuestionPage([first]);
+  const virtualizer = new AnswerVirtualizer({
+    document: page.documentObject,
+    window: page.windowObject,
+    config: { enabled: true, minAnswers: 1, bufferViewports: 1 },
+  });
+  virtualizer.start();
+  assert.equal(virtualizer.getStats().total, 1);
+
+  // A fresh node joins the list while still hydrating (no data-zop yet), so
+  // this scan tracks it under the anonymous fallback id.
+  const replacement = makeAnswer({ top: 1000, bottom: 1220, height: 220 });
+  page.listRoot.appendChild(replacement);
+  virtualizer.scan();
+  assert.equal(virtualizer.getStats().total, 2);
+
+  // React drops the original node and hydrates the original's itemId onto
+  // the fresh node: the id-keyed record rebinds onto it, and the stale
+  // anonymous record mapped to that node must be retired, not orphaned.
+  page.listRoot.removeChild(first);
+  replacement.children[0].setAttribute("data-zop", JSON.stringify({ type: "answer", itemId: "keep-1" }));
+  virtualizer.scan();
+
+  assert.equal(virtualizer.getStats().total, 1, "the stale record must be retired, not orphaned");
+  assert.equal(virtualizer.recordsById.size, 1);
+  assert.equal(virtualizer.records.size, 1);
+  const [record] = [...virtualizer.recordsById.values()];
+  assert.equal(record.id, "item:keep-1");
+  assert.equal(record.element, replacement);
+  virtualizer.destroy();
+});
+
 test("_restoreParkedStyles strictly cleanses stale contentVisibility hidden value", () => {
   const answer = makeAnswer({ top: 0, bottom: 200, height: 200 });
   const page = makeQuestionPage([answer]);
