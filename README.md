@@ -6,6 +6,7 @@
 
 <p align="center">面向 Chromium 内核浏览器的轻量级极客扩展。专为解决知乎网页版（尤其是超长回答问答流）越滚越卡、内存飙升、交互阻塞与大面积空白而生。</p>
 
+[![Edge Add-ons](https://img.shields.io/badge/Microsoft%20Edge-Add--ons-0078D7?logo=microsoftedge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/khlcbklmlgcoclfanncdlajfmcokgolc)
 [![CI](https://github.com/wayneCui628/smoother-zhihu/actions/workflows/ci.yml/badge.svg)](https://github.com/wayneCui628/smoother-zhihu/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-success.svg)](manifest.json)
@@ -51,14 +52,21 @@ npm run benchmark
 
 ## 安装使用
 
-### 快速安装（开发者模式）
+### 官方商店一键安装（推荐）
+
+访问 [Microsoft Edge 外接程序商店](https://microsoftedge.microsoft.com/addons/detail/khlcbklmlgcoclfanncdlajfmcokgolc)，点击 **获取** 即可一键安装并享受后续全自动静默更新。
+
+> 说明：所有主流 Chromium 内核浏览器（包括 Google Chrome、Brave、Vivaldi 等）均可直接在上述 Edge 商店页面点击安装使用。
+
+### 开发者模式离线安装
+
 1. 获取项目代码（任选一种）：
+   - **GitHub Release**：前往 [Releases](https://github.com/wayneCui628/smoother-zhihu/releases) 下载最新发布的 `smoother-zhihu-v*.zip` 并解压；
    - **Git 方式**：运行 `git clone https://github.com/wayneCui628/smoother-zhihu.git`
-   - **直接下载**：点击页面右上角绿色 **Code** 按钮 -> **Download ZIP**，下载后解压到本地；
 2. 打开 Chromium 内核浏览器扩展管理页面：
-   - **Chrome**: 地址栏输入 `chrome://extensions`
    - **Edge**: 地址栏输入 `edge://extensions`
-3. 开启 **开发者模式**（Chrome 位于页面右上角开关，Edge 位于左侧菜单栏底部）；
+   - **Chrome**: 地址栏输入 `chrome://extensions`
+3. 开启 **开发者模式**（Edge 位于左侧菜单栏底部开关，Chrome 位于页面右上角开关）；
 4. 点击 **加载已解压的扩展程序** (Load unpacked)，选择本项目包含 `manifest.json` 的解压根目录；
 5. 打开任意回答数量较多的知乎问题页（如 50+ 回答），尽情享受丝滑滚动体验！
 
