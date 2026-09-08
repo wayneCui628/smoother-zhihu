@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Use Node.js 22
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+
+    - name: Run syntax and unit test suite
+      run: npm run check
+
+    - name: Verify the tag matches manifest and package versions
+      env:
+        REF_NAME: ${{ github.ref_name }}
+      run: |
+        node -e '
+          const fs = require("fs");
+          const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const tag = process.env.REF_NAME.replace(/^v/, "");
+          if (manifest.version !== tag || pkg.version !== tag) {
+            console.error(
+              "Version mismatch: tag v" + tag +
+              ", manifest " + manifest.version +
+              ", package " + pkg.version,
+            );
+            process.exit(1);
+          }
+          console.log("Versions aligned at " + tag);
+        '
+
+    - name: Build the store archive
+      run: npm run pack
+
+    - name: Create the GitHub release with the archive attached
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        REF_NAME: ${{ github.ref_name }}
+      run: gh release create "$REF_NAME" "dist/smoother-zhihu-$REF_NAME.zip" --title "$REF_NAME" --generate-notes || gh release upload "$REF_NAME" "dist/smoother-zhihu-$REF_NAME.zip" --clobber
