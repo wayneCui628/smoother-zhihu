@@ -1,6 +1,6 @@
 {
   "name": "smoother-zhihu",
-  "version": "0.3.20",
+  "version": "1.0.0",
   "private": true,
   "description": "A dependency-free Chromium extension that keeps long Zhihu answer pages responsive.",
   "author": "Wayne Cui (wayneCui628)",
@@ -21,8 +21,8 @@
     "performance"
   ],
   "scripts": {
-    "test": "node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js tests/popup.test.js",
-    "check": "node --check src/content/virtualizer.js && node --check src/content/page-widget.js && node --check src/content/content.js && node --check src/popup/popup.js && node --check scripts/pack.js && node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js tests/popup.test.js",
+    "test": "node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js tests/popup.test.js tests/pack.test.js",
+    "check": "node --check src/content/virtualizer.js && node --check src/content/page-widget.js && node --check src/content/content.js && node --check src/popup/popup.js && node --check scripts/pack.js && node --test tests/manifest.test.js tests/virtualizer.test.js tests/content.test.js tests/page-widget.test.js tests/popup.test.js tests/pack.test.js",
     "benchmark": "node --experimental-websocket tests/benchmark.js",
     "pack": "node scripts/pack.js"
   },
