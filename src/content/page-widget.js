@@ -352,7 +352,10 @@
 
       if (this.root) {
         this.setExpanded(Boolean(this._state && this._state.expanded));
-        this.setVisible(true);
+        // Stored config arrives asynchronously from the controller. Start
+        // hidden so a saved "hide widget" setting never flashes the widget on
+        // page load; the controller reveals it once the config is applied.
+        this.setVisible(false);
         this.reposition();
       }
     }

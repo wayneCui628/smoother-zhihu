@@ -178,6 +178,10 @@ test("visibility is reversible and duplicate construction reuses one root", () =
 
   assert.equal(first.root, second.root);
   assert.equal(document.body.children.length, 1);
+  // Widgets boot hidden and wait for the controller to apply the stored
+  // config, so a saved "hide widget" setting never flashes on page load.
+  assert.equal(first.root.hidden, true);
+  assert.equal(first.root.getAttribute("aria-hidden"), "true");
 
   first.setVisible(false);
   assert.equal(first.root.hidden, true);

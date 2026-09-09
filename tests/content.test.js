@@ -36,7 +36,6 @@ function createHarness() {
   };
   const window = {
     location: { href: "https://www.zhihu.com/question/1" },
-    history: {},
     addEventListener() {},
     removeEventListener() {},
     setInterval(callback) {
@@ -242,7 +241,6 @@ test("waits for stored config before starting or scanning a question page", () =
   };
   const window = {
     location: { href: "https://www.zhihu.com/question/slow" },
-    history: {},
     addEventListener() {},
     removeEventListener() {},
   };
@@ -286,7 +284,6 @@ test("onRouteChange schedules retry timers if new answer list root is not yet re
   const timeouts = [];
   const window = {
     location: { href: "https://www.zhihu.com/question/1" },
-    history: {},
     addEventListener(type, listener) {
       if (type === "popstate") {
         this.popstateListener = listener;
@@ -353,4 +350,285 @@ test("onRouteChange schedules retry timers if new answer list root is not yet re
   timeouts[0].callback();
 
   controller.destroy();
+});
+
+function createWidgetGateHarness() {
+  let storageCallback;
+  const runtimeMessages = createEvent();
+  const storageChanges = createEvent();
+  const window = {
+    location: { href: "https://www.zhihu.com/question/slow-widget" },
+    addEventListener() {},
+    removeEventListener() {},
+    setInterval(callback) {
+      this.intervalCallback = callback;
+      return 51;
+    },
+    clearInterval(id) {
+      this.clearedInterval = id;
+    },
+    setTimeout(callback) {
+      this.timeoutCallback = callback;
+      return 52;
+    },
+    clearTimeout(id) {
+      this.clearedTimeout = id;
+    },
+  };
+  const document = {
+    defaultView: window,
+    hidden: false,
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const pageWidget = {
+    visibility: [],
+    updates: [],
+    setVisible(value) {
+      this.visibility.push(value);
+    },
+    update(stats, config) {
+      this.updates.push({ stats: { ...stats }, config: { ...config } });
+    },
+    reposition() {},
+    destroy() {},
+  };
+  const virtualizer = {
+    started: false,
+    config: { enabled: false, bufferViewports: 4, minAnswers: 12, showPageWidget: true },
+    getStats() {
+      return { total: 0, parked: 0, live: 0, enabled: this.config.enabled };
+    },
+    getConfig() {
+      return { ...this.config };
+    },
+    updateConfig(config) {
+      this.config = { ...this.config, ...config };
+      this.started = this.config.enabled;
+      return this.getStats();
+    },
+    rescan() {},
+    destroy() {},
+  };
+  const controller = createController({
+    chrome: {
+      runtime: { onMessage: runtimeMessages },
+      storage: {
+        sync: {
+          get(_keys, callback) {
+            storageCallback = callback;
+          },
+          set() {},
+        },
+        onChanged: storageChanges,
+      },
+    },
+    document,
+    window,
+    // The virtualizer is created through the API (not injected), so the
+    // controller starts with configReady === false just like a real page.
+    virtualizerApi: {
+      normalizeConfig(value) {
+        return {
+          enabled: value.enabled !== false,
+          bufferViewports: Number(value.bufferViewports) || 4,
+          minAnswers: Number(value.minAnswers) || 12,
+          showPageWidget: value.showPageWidget !== false,
+        };
+      },
+      createVirtualizer() {
+        return virtualizer;
+      },
+    },
+    pageWidget,
+  });
+  return {
+    controller,
+    pageWidget,
+    window,
+    fireStoredConfig(config) {
+      storageCallback({ [STORAGE_KEY]: config });
+    },
+  };
+}
+
+test("page widget stays hidden until the stored config arrives, then follows it", () => {
+  const harness = createWidgetGateHarness();
+
+  // Before the async storage read resolves, the controller must not touch
+  // widget visibility at all: the widget boots hidden, so a saved "hide
+  // widget" setting can never flash it on page load.
+  harness.window.intervalCallback();
+  assert.deepEqual(harness.pageWidget.visibility, []);
+  assert.equal(harness.pageWidget.updates.length, 0);
+
+  harness.fireStoredConfig({
+    enabled: true,
+    bufferViewports: 4,
+    minAnswers: 12,
+    showPageWidget: true,
+  });
+  assert.equal(harness.pageWidget.visibility.at(-1), true);
+  assert.equal(harness.pageWidget.updates.length, 1);
+
+  harness.window.intervalCallback();
+  assert.equal(harness.pageWidget.visibility.at(-1), true, "stays visible on later ticks");
+
+  harness.controller.destroy();
+});
+
+test("page widget never becomes visible when the stored config hides it", () => {
+  const harness = createWidgetGateHarness();
+
+  harness.window.intervalCallback();
+  assert.deepEqual(harness.pageWidget.visibility, []);
+
+  harness.fireStoredConfig({
+    enabled: true,
+    bufferViewports: 4,
+    minAnswers: 12,
+    showPageWidget: false,
+  });
+  assert.deepEqual(harness.pageWidget.visibility, [false]);
+  assert.equal(harness.pageWidget.updates.length, 0, "hidden widget is not rendered");
+
+  harness.window.intervalCallback();
+  assert.equal(harness.pageWidget.visibility.includes(true), false, "never flashes visible");
+
+  harness.controller.destroy();
+});
+
+function createRouteHarness() {
+  const runtimeMessages = createEvent();
+  const storageChanges = createEvent();
+  const timeouts = [];
+  const clearedTimeouts = [];
+  const window = {
+    location: { href: "https://www.zhihu.com/question/1" },
+    addEventListener(type, listener) {
+      if (type === "popstate") {
+        this.popstateListener = listener;
+      }
+    },
+    removeEventListener() {},
+    setTimeout(callback, delay) {
+      timeouts.push({ callback, delay });
+      return timeouts.length;
+    },
+    clearTimeout(id) {
+      clearedTimeouts.push(id);
+    },
+  };
+  const document = {
+    defaultView: window,
+    hidden: false,
+    answersContainer: null,
+    querySelector(selector) {
+      return selector === ".QuestionAnswers-answers" ? this.answersContainer : null;
+    },
+  };
+  let rescans = 0;
+  const virtualizer = {
+    started: true,
+    listRoot: null,
+    config: { enabled: true, bufferViewports: 4, minAnswers: 12, showPageWidget: true },
+    getStats() {
+      return { total: 0, parked: 0, live: 0, enabled: true };
+    },
+    getConfig() {
+      return { ...this.config };
+    },
+    updateConfig() {},
+    rescan() {
+      rescans += 1;
+      // Mirror the real virtualizer: a rescan re-attaches the list root only
+      // when the answers structure exists in the DOM.
+      if (document.answersContainer) {
+        this.listRoot = document.answersContainer;
+      }
+    },
+    destroy() {},
+  };
+  const controller = createController({
+    chrome: {
+      runtime: { onMessage: runtimeMessages },
+      storage: {
+        sync: {
+          get(_keys, callback) {
+            callback({ [STORAGE_KEY]: { enabled: true, bufferViewports: 4, minAnswers: 12 } });
+          },
+          set() {},
+        },
+        onChanged: storageChanges,
+      },
+    },
+    document,
+    window,
+    virtualizerApi: {
+      normalizeConfig(value) {
+        return value;
+      },
+      createVirtualizer() {
+        return virtualizer;
+      },
+    },
+  });
+  return {
+    controller,
+    window,
+    document,
+    virtualizer,
+    timeouts,
+    clearedTimeouts,
+    rescanCount: () => rescans,
+  };
+}
+
+test("deep-link route retries skip full rescans while the answers container is absent", () => {
+  const harness = createRouteHarness();
+  harness.window.location.href = "https://www.zhihu.com/question/1/answer/9";
+  harness.window.popstateListener();
+
+  assert.equal(harness.rescanCount(), 1, "initial sync performs exactly one full rescan");
+  assert.equal(harness.timeouts.length, 4);
+  assert.deepEqual(harness.timeouts.map((item) => item.delay), [150, 400, 900, 1800]);
+
+  for (const item of harness.timeouts) {
+    item.callback();
+  }
+  assert.equal(
+    harness.rescanCount(),
+    1,
+    "container-less deep-link view must not pay for retry rescans",
+  );
+
+  harness.controller.destroy();
+});
+
+test("route retries resume full rescans once the answers container appears", () => {
+  const harness = createRouteHarness();
+  harness.window.location.href = "https://www.zhihu.com/question/1/answer/9";
+  harness.window.popstateListener();
+
+  assert.equal(harness.rescanCount(), 1);
+  assert.equal(harness.timeouts.length, 4);
+
+  // The user switches to the full answer list ("view all answers") and the
+  // container mounts before the first retry fires.
+  harness.document.answersContainer = {};
+  harness.timeouts[0].callback();
+
+  assert.equal(harness.rescanCount(), 2, "the retry performs a full rescan and recovers");
+  assert.equal(
+    harness.virtualizer.listRoot,
+    harness.document.answersContainer,
+    "virtualization re-attaches to the list root",
+  );
+  assert.deepEqual(
+    harness.clearedTimeouts,
+    [1, 2, 3, 4],
+    "remaining retries are cleared after recovery",
+  );
+
+  harness.controller.destroy();
 });

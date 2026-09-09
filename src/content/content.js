@@ -160,6 +160,11 @@
     return message;
   }
 
+  // SPA navigations initiated by Zhihu's main world (history.pushState /
+  // replaceState) are invisible to this isolated-world content script, so
+  // patching History here would never fire. Route changes are instead
+  // detected via popstate/hashchange, the widget's per-second URL polling,
+  // and the virtualizer's watchdog.
   function attachRouteListeners(windowObject, onRouteChange) {
     const cleanups = [];
     if (!windowObject || typeof windowObject.addEventListener !== "function") {
@@ -173,35 +178,6 @@
           windowObject.removeEventListener(eventName, onRouteChange);
         }
       });
-    }
-
-    const history = windowObject.history;
-    if (!history) {
-      return cleanups;
-    }
-
-    for (const methodName of ["pushState", "replaceState"]) {
-      if (typeof history[methodName] !== "function") {
-        continue;
-      }
-
-      const original = history[methodName];
-      const wrapped = function wrappedHistoryMethod(...args) {
-        const result = original.apply(this, args);
-        onRouteChange();
-        return result;
-      };
-
-      try {
-        history[methodName] = wrapped;
-        cleanups.push(() => {
-          if (history[methodName] === wrapped) {
-            history[methodName] = original;
-          }
-        });
-      } catch (_error) {
-        // Some page contexts expose a non-writable History method.
-      }
     }
 
     return cleanups;
@@ -290,7 +266,14 @@
     }
 
     function refreshPageWidget() {
-      if (destroyed || !pageWidget) {
+      // The widget boots hidden and the stored config arrives asynchronously.
+      // Wait for it before touching visibility, mirroring the virtualizer's
+      // own "do not act on defaults before the saved state applies" rule;
+      // otherwise a saved "hide widget" setting flashes the widget on load.
+      // The gate also silences the widget's 1s URL polling (and its route
+      // detection) until config lands; the virtualizer watchdog covers that
+      // short pre-config window.
+      if (destroyed || !pageWidget || !configReady) {
         return;
       }
 
@@ -432,6 +415,27 @@
       return Boolean(virtualizer.listRoot);
     };
 
+    // Cheap probe mirroring the selector used by the virtualizer's
+    // findQuestionAnswersContainers: a deep-link single-answer view never
+    // renders an answers list, so full rescans are pointless until the
+    // container shows up (for example after switching to the "view all
+    // answers" view).
+    const answersContainerMayExist = () => {
+      if (!documentObject || typeof documentObject.querySelector !== "function") {
+        // Cannot probe cheaply (exotic documents, test stubs). Fail open so
+        // the predicate never blocks recovery.
+        return true;
+      }
+      // Mirrors the virtualizer's own selector; the literal is only a fallback
+      // for the (test-only) case of a virtualizer API without the constant.
+      const selector = (api && api.ANSWERS_CONTAINER_SELECTOR) || ".QuestionAnswers-answers";
+      try {
+        return Boolean(documentObject.querySelector(selector));
+      } catch (_error) {
+        return true;
+      }
+    };
+
     const onRouteChange = () => {
       if (destroyed) {
         return;
@@ -454,6 +458,14 @@
       const delays = [150, 400, 900, 1800];
       delays.forEach((delay) => {
         const timer = setTimeoutFn.call(windowObject, () => {
+          // Cheap predicate first: skip the full rescan while the
+          // virtualizer still has no list root and the answers container is
+          // absent. Each retry re-evaluates the predicate, so a container
+          // that appears later resumes the full scan and recovery.
+          const alreadyRecovered = Boolean(virtualizer && virtualizer.listRoot);
+          if (!alreadyRecovered && !answersContainerMayExist()) {
+            return;
+          }
           if (triggerVirtualizerSync()) {
             clearRouteRetries();
           }
@@ -566,6 +578,9 @@
       virtualizer,
       getStats: () => statusWithConfig(virtualizer),
       updateConfig: (config) => {
+        // An explicit config push counts as config arrival, matching the
+        // UPDATE_CONFIG message handler, so the widget gate lifts here too.
+        configReady = true;
         virtualizer.updateConfig(config);
         persistConfig(storage, virtualizer.getConfig());
         refreshPageWidget();
