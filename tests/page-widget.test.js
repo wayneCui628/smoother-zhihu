@@ -228,15 +228,54 @@ test("toggle is native, updates aria state, and survives duplicate instance tear
   second.destroy();
   assert.equal(document.getElementById(WIDGET_ID), null);
   assert.equal(toggle.listeners.get("click")?.size || 0, 0);
+  // The shared transitionend listener lives on the root and must also be
+  // released once the last instance tears the widget down.
+  assert.equal(root.listeners.get("transitionend")?.size || 0, 0);
 });
 
 test("collapsed receipt CSS stays compact and avoids the corner controls", () => {
   const css = fs.readFileSync(path.join(__dirname, "../src/content/content.css"), "utf8");
   assert.match(css, /\.zhihu-smoother-page-widget\s*\{[\s\S]*right:\s*var\(--zhihu-smoother-right,\s*18px\);/);
-  assert.match(css, /\.zhihu-smoother-page-widget\[data-expanded="false"\]\s*\{[\s\S]*width:\s*150px;[\s\S]*height:\s*44px;/);
+  // Collapsed height is a clamped max-height so width and height animate on
+  // the same frame; the root always clips while details owns scrolling.
+  assert.match(css, /\.zhihu-smoother-page-widget\s*\{[\s\S]*transition:\s*opacity 160ms ease, transform 160ms ease, width 160ms ease, max-height 160ms ease;/);
+  assert.match(css, /\.zhihu-smoother-page-widget\s*\{[^}]*overflow:\s*hidden;/);
+  assert.match(css, /\.zhihu-smoother-page-widget\[data-expanded="false"\]\s*\{[\s\S]*width:\s*150px;[\s\S]*max-height:\s*44px;/);
   assert.match(css, /\.zhihu-smoother-page-widget\[data-expanded="true"\]\s*\{[\s\S]*max-height:\s*calc\(100vh\s*-\s*var\(--zhihu-smoother-bottom,\s*18px\)\s*-\s*12px\);/);
+  assert.match(css, /\.zhihu-smoother-page-widget\[data-expanded="true"\]\s*\.zhihu-smoother-widget__details\s*\{[\s\S]*max-height:\s*calc\(100vh\s*-\s*var\(--zhihu-smoother-bottom,\s*18px\)\s*-\s*60px\);[\s\S]*overflow-y:\s*auto;/);
+  assert.match(css, /\.zhihu-smoother-widget__details\s*\{[^}]*box-sizing:\s*border-box;/);
+  assert.match(css, /\.zhihu-smoother-page-widget\[data-expanded="true"\]\s*\.zhihu-smoother-widget__details\s*\{[^}]*overscroll-behavior:\s*contain;/);
   assert.match(css, /\.zhihu-smoother-widget__details\s*\{[\s\S]*display:\s*none;/);
   assert.match(css, /\.zhihu-smoother-page-widget\s*\{[\s\S]*pointer-events:\s*auto;/);
+  // The chevron points up while collapsed and flips down once expanded; lock
+  // both rotation directions so the visual contract survives refactors.
+  assert.match(css, /\.zhihu-smoother-widget__toggle::after\s*\{[\s\S]*transform:\s*rotate\(225deg\)/);
+  assert.match(css, /\.zhihu-smoother-page-widget\[data-expanded="true"\]\s*\.zhihu-smoother-widget__toggle::after\s*\{[\s\S]*transform:\s*rotate\(45deg\)/);
+});
+
+test("transitionend settles placement after the expand animation", () => {
+  const document = createDocument();
+  const widget = createPageWidget({ document, window: { innerWidth: 1000, innerHeight: 800 } });
+  const root = widget.root;
+
+  let repositionCalls = 0;
+  const reposition = widget.reposition.bind(widget);
+  widget.reposition = () => {
+    repositionCalls += 1;
+    return reposition();
+  };
+
+  // Both size properties animate, so each may fire a settle event.
+  root.dispatchEvent({ type: "transitionend", target: root, propertyName: "max-height" });
+  root.dispatchEvent({ type: "transitionend", target: root, propertyName: "width" });
+  assert.equal(repositionCalls, 2, "size transitions on the root must re-run placement");
+
+  // Unrelated properties and events bubbling from children must not trigger it.
+  root.dispatchEvent({ type: "transitionend", target: root, propertyName: "opacity" });
+  root.dispatchEvent({ type: "transitionend", target: root.children[0], propertyName: "width" });
+  assert.equal(repositionCalls, 2, "non-size or bubbled transitionend events are ignored");
+
+  widget.destroy();
 });
 
 test("reposition avoids official corner controls and falls back without them", () => {

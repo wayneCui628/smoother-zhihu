@@ -52,9 +52,10 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
   line-height: 1.35;
+  overflow: hidden;
   pointer-events: auto;
   opacity: 1;
-  transition: opacity 160ms ease, transform 160ms ease, width 160ms ease;
+  transition: opacity 160ms ease, transform 160ms ease, width 160ms ease, max-height 160ms ease;
 }
 
 .zhihu-smoother-page-widget[hidden],
@@ -64,15 +65,12 @@
 
 .zhihu-smoother-page-widget[data-expanded="false"] {
   width: 150px;
-  height: 44px;
-  overflow: hidden;
+  max-height: 44px;
 }
 
 .zhihu-smoother-page-widget[data-expanded="true"] {
   width: 230px;
   max-height: calc(100vh - var(--zhihu-smoother-bottom, 18px) - 12px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 .zhihu-smoother-widget__toggle {
@@ -104,13 +102,13 @@
   height: 7px;
   border-right: 1.5px solid #121212;
   border-bottom: 1.5px solid #121212;
-  transform: rotate(45deg) translate(-2px, -2px);
+  transform: rotate(225deg) translate(-1px, -1px);
   transition: transform 160ms ease;
   content: "";
 }
 
 .zhihu-smoother-page-widget[data-expanded="true"] .zhihu-smoother-widget__toggle::after {
-  transform: rotate(225deg) translate(-1px, -1px);
+  transform: rotate(45deg) translate(-2px, -2px);
 }
 
 .zhihu-smoother-widget__title {
@@ -162,11 +160,15 @@
 
 .zhihu-smoother-widget__details {
   display: none;
+  box-sizing: border-box;
   padding: 0 17px 15px;
 }
 
 .zhihu-smoother-page-widget[data-expanded="true"] .zhihu-smoother-widget__details {
   display: block;
+  max-height: calc(100vh - var(--zhihu-smoother-bottom, 18px) - 60px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .zhihu-smoother-widget__live-status {

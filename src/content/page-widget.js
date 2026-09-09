@@ -329,7 +329,7 @@
 
       let state = ensured.state || (this.root && this.root[STATE_KEY]);
       if (!state && this.root) {
-        state = { instances: 0, owners: [], expanded: false, lastKey: null, onToggle: null, reposition: null };
+        state = { instances: 0, owners: [], expanded: false, lastKey: null, onToggle: null, onTransitionEnd: null, reposition: null };
         this.root[STATE_KEY] = state;
       }
       this._state = state;
@@ -351,6 +351,19 @@
       }
 
       if (this.root) {
+        const root = this.root;
+        if (this._state && !this._state.onTransitionEnd && typeof root.addEventListener === "function") {
+          const sharedRoot = root;
+          const sharedState = this._state;
+          this._state.onTransitionEnd = (event) => {
+            if (event && event.target !== sharedRoot) return;
+            if (event && event.propertyName && event.propertyName !== "max-height" && event.propertyName !== "width") return;
+            if (typeof sharedState.reposition === "function") sharedState.reposition();
+          };
+          // The expand/collapse size animation leaves the rendered height one
+          // step behind the target state; re-run placement once it settles.
+          root.addEventListener("transitionend", this._state.onTransitionEnd);
+        }
         this.setExpanded(Boolean(this._state && this._state.expanded));
         // Stored config arrives asynchronously from the controller. Start
         // hidden so a saved "hide widget" setting never flashes the widget on
@@ -505,6 +518,10 @@
             this.refs.toggle.removeEventListener("click", this._state.onToggle);
           }
           this._state.onToggle = null;
+          if (this.root && this._state.onTransitionEnd && typeof this.root.removeEventListener === "function") {
+            this.root.removeEventListener("transitionend", this._state.onTransitionEnd);
+          }
+          this._state.onTransitionEnd = null;
           if (this.root) {
             try { delete this.root[STATE_KEY]; } catch (_error) { this.root[STATE_KEY] = null; }
           }
