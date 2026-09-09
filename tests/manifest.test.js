@@ -15,6 +15,10 @@ test("manifest is a focused Manifest V3 extension", () => {
   assert.equal(manifest.host_permissions, undefined);
 });
 
+test("manifest declares the project homepage", () => {
+  assert.equal(manifest.homepage_url, "https://github.com/wayneCui628/smoother-zhihu");
+});
+
 test("all manifest assets exist and the virtualizer loads first", () => {
   const contentScript = manifest.content_scripts.at(0);
   assert.deepEqual(contentScript.js, [
