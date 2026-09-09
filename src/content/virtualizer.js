@@ -30,6 +30,10 @@
 
   const ANSWER_CLASS = "zhihu-smoother-answer";
   const PARKED_CLASS = "zhihu-smoother-parked";
+  // Single source of truth for the answers-container selector. content.js
+  // reuses it (via the export below) for its cheap route-retry predicate, so
+  // a Zhihu markup change only ever needs one edit.
+  const ANSWERS_CONTAINER_SELECTOR = ".QuestionAnswers-answers";
   // content-visibility:auto can report a browser supplied intrinsic height
   // (often 640px/672px) for an answer that has never been laid out. New rows
   // use the median of measured rows, with this modest value as a safe seed.
@@ -383,10 +387,10 @@
       return containers;
     }
 
-    if (matchesSelector(root, ".QuestionAnswers-answers")) {
+    if (matchesSelector(root, ANSWERS_CONTAINER_SELECTOR)) {
       uniquePush(containers, seen, root);
     }
-    for (const container of queryAll(root, ".QuestionAnswers-answers")) {
+    for (const container of queryAll(root, ANSWERS_CONTAINER_SELECTOR)) {
       uniquePush(containers, seen, container);
     }
     return containers;
@@ -1275,13 +1279,19 @@
           this._deferForGrace(record, graceRemaining);
           continue;
         }
-        if (this._isPinnedRecord(record)) {
+        const rect = getRect(record.element);
+        if (!rect) {
           continue;
         }
-        const rect = getRect(record.element);
-        if (rect && !this._isNearViewport(rect, viewportHeight, buffer)) {
-          parkCandidates.push([record, rect]);
-        } else if (rect && this._isNearViewport(rect, viewportHeight, 0)) {
+        if (!this._isNearViewport(rect, viewportHeight, buffer)) {
+          // The pinned-media probe costs three querySelectorAll sweeps, so only
+          // rows that are about to park pay for it; near-viewport rows never park.
+          if (!this._isPinnedRecord(record)) {
+            parkCandidates.push([record, rect]);
+          }
+          continue;
+        }
+        if (this._isNearViewport(rect, viewportHeight, 0)) {
           // Near-viewport measurements only mutate cached record state, never
           // element styles, so they stay in the read phase.
           this._maybeMeasureRecord(record, rect);
@@ -2079,6 +2089,7 @@
   return {
     ANSWER_CLASS,
     ANSWER_SELECTOR: ".AnswerItem",
+    ANSWERS_CONTAINER_SELECTOR,
     CONFIG_LIMITS,
     DEFAULT_CONFIG,
     AnswerVirtualizer,
