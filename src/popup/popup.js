@@ -68,6 +68,8 @@ function normalizeConfig(value) {
   const raw = value && typeof value === 'object' ? value : {};
   const parsedBuffer = Number(raw.bufferViewports);
   const rawMin = Number(raw.minAnswers);
+  // Migration: v0.3.x shipped a default of 12, so a stored 12 is a stale
+  // default rather than a deliberate choice — fall back to the new default.
   const parsedMin = rawMin === 12 ? DEFAULT_CONFIG.minAnswers : rawMin;
   return {
     enabled: raw.enabled !== false,

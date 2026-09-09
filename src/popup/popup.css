@@ -1,15 +1,17 @@
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
   --bg: #ffffff;
   --card-border: #ebebeb;
   --blue: #0084ff;
   --blue-deep: #0071e3;
-  --blue-soft: rgba(0, 132, 255, 0.06);
+  --blue-active: #0064d1;
   --blue-selected: #f0f8ff;
+  --focus-ring: 0 0 0 3px rgba(0, 132, 255, 0.22);
   --ink: #121212;
   --secondary: #8590a6;
   --aux: #999999;
   --toggle-off: #ebebeb;
+  --btn-disabled-bg: #f0f2f5;
   --shadow-card: rgba(0, 0, 0, 0.04);
 }
 
@@ -180,7 +182,7 @@ h2 {
 }
 
 .toggle-control input:focus-visible + .toggle-track {
-  box-shadow: 0 0 0 3px rgba(0, 132, 255, 0.22);
+  box-shadow: var(--focus-ring);
 }
 
 .value-mark {
@@ -253,7 +255,7 @@ h2 {
 }
 
 .buffer-option input:focus-visible + .option-face {
-  box-shadow: 0 0 0 3px rgba(0, 132, 255, 0.22);
+  box-shadow: var(--focus-ring);
 }
 
 .status-card {
@@ -366,8 +368,8 @@ h2 {
 }
 
 .restore-button:active:not(:disabled) {
-  background: #0064d1;
-  border-color: #0064d1;
+  background: var(--blue-active);
+  border-color: var(--blue-active);
 }
 
 .restore-button:focus-visible {
@@ -376,8 +378,8 @@ h2 {
 }
 
 .restore-button:disabled {
-  background: #f0f2f5;
-  border-color: #f0f2f5;
+  background: var(--btn-disabled-bg);
+  border-color: var(--btn-disabled-bg);
   color: var(--aux);
   cursor: not-allowed;
 }
@@ -398,6 +400,20 @@ h2 {
   position: absolute;
   white-space: nowrap;
   width: 1px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e1e;
+    --card-border: #3a3a3a;
+    --blue-selected: rgba(0, 132, 255, 0.18);
+    --focus-ring: 0 0 0 3px rgba(0, 132, 255, 0.45);
+    --ink: #e2e2e2;
+    --secondary: #9aa4bf;
+    --toggle-off: #3a3a3a;
+    --btn-disabled-bg: #2f2f2f;
+    --shadow-card: rgba(0, 0, 0, 0.35);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

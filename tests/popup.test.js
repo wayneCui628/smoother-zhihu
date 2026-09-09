@@ -1,5 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const projectRoot = path.resolve(__dirname, "..");
+const popupCss = fs.readFileSync(path.join(projectRoot, "src/popup/popup.css"), "utf8");
 
 const { normalizeConfig, DEFAULT_CONFIG } = require("../src/popup/popup.js");
 
@@ -41,4 +46,10 @@ test("popup normalizeConfig supports 1/2/4 viewport modes and handles invalid bu
   assert.equal(normalizeConfig({ bufferViewports: 4 }).bufferViewports, 4);
   assert.equal(normalizeConfig({ bufferViewports: 99 }).bufferViewports, DEFAULT_CONFIG.bufferViewports);
   assert.equal(DEFAULT_CONFIG.bufferViewports, 2);
+});
+
+test("popup css declares a light-dark color scheme with a dark palette", () => {
+  assert.match(popupCss, /color-scheme:\s*light dark;/);
+  assert.match(popupCss, /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{[\s\S]*?--bg:\s*#1e1e1e;/);
+  assert.match(popupCss, /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{[\s\S]*?--ink:\s*#e2e2e2;/);
 });
