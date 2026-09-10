@@ -228,7 +228,6 @@
     if (details) {
       details.id = DETAILS_ID;
       setAttribute(details, "id", DETAILS_ID);
-      if ("hidden" in details) details.hidden = true;
     }
 
     appendElement(documentObject, details, "p", "zhihu-smoother-widget__eyebrow", "优化状态");
@@ -307,7 +306,6 @@
       setAttribute(toggle, "aria-controls", DETAILS_ID);
       setAttribute(toggle, "aria-label", nextExpanded ? "收起优化详情" : "展开优化详情");
     }
-    if (refs && refs.details) refs.details.hidden = !nextExpanded;
   }
 
   class PageWidget {

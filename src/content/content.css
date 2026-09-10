@@ -159,16 +159,24 @@
 }
 
 .zhihu-smoother-widget__details {
-  display: none;
   box-sizing: border-box;
-  padding: 0 17px 15px;
-}
-
-.zhihu-smoother-page-widget[data-expanded="true"] .zhihu-smoother-widget__details {
   display: block;
+  padding: 0 17px 15px;
+  /* Collapsed clipping happens on the root (overflow hidden + max-height);
+     visibility keeps the panel paintable through the collapse animation and
+     removes it from the accessibility tree once the box has settled. */
+  visibility: hidden;
+  transition: visibility 160ms ease;
+  /* Scroll geometry is permanent, not expand-only: letting the scrollbar
+     vanish at collapse t=0 would reflow the fading panel sideways (Windows
+     classic scrollbars). Collapsed it stays clipped by the root's max-height. */
   max-height: calc(100vh - var(--zhihu-smoother-bottom, 18px) - 60px);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.zhihu-smoother-page-widget[data-expanded="true"] .zhihu-smoother-widget__details {
+  visibility: visible;
 }
 
 .zhihu-smoother-widget__live-status {
@@ -317,6 +325,10 @@
   }
 
   .zhihu-smoother-widget__toggle::after {
+    transition: none;
+  }
+
+  .zhihu-smoother-widget__details {
     transition: none;
   }
 }

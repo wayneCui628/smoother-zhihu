@@ -203,6 +203,7 @@ test("toggle is native, updates aria state, and survives duplicate instance tear
   const second = createPageWidget({ document });
   const root = first.root;
   const toggle = root.querySelector(".zhihu-smoother-widget__toggle");
+  const details = root.querySelector(".zhihu-smoother-widget__details");
 
   assert.equal(first.expanded, false);
   assert.equal(toggle.getAttribute("aria-expanded"), "false");
@@ -219,6 +220,10 @@ test("toggle is native, updates aria state, and survives duplicate instance tear
   second.setExpanded(false);
   assert.equal(second.expanded, false);
   assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  // Collapsed reachability is CSS-driven (visibility on the panel), so the JS
+  // layer must leave the hidden attribute alone and let the collapse animation
+  // clip the still-painted content.
+  assert.equal(details.hidden, false, "the collapsed panel stays unhidden in the DOM for the CSS transition");
   second.setExpanded(true);
   second.update(
     { total: 35, parked: 22, live: 13, enabled: true },
@@ -237,15 +242,27 @@ test("collapsed receipt CSS stays compact and avoids the corner controls", () =>
   const css = fs.readFileSync(path.join(__dirname, "../src/content/content.css"), "utf8");
   assert.match(css, /\.zhihu-smoother-page-widget\s*\{[\s\S]*right:\s*var\(--zhihu-smoother-right,\s*18px\);/);
   // Collapsed height is a clamped max-height so width and height animate on
-  // the same frame; the root always clips while details owns scrolling.
+  // the same frame; the root always clips while details owns scrolling. The
+  // scroll geometry lives in the base rule so the data-expanded flip never
+  // toggles a scrollbar or reflows the panel mid-fade at collapse t=0.
   assert.match(css, /\.zhihu-smoother-page-widget\s*\{[\s\S]*transition:\s*opacity 160ms ease, transform 160ms ease, width 160ms ease, max-height 160ms ease;/);
   assert.match(css, /\.zhihu-smoother-page-widget\s*\{[^}]*overflow:\s*hidden;/);
   assert.match(css, /\.zhihu-smoother-page-widget\[data-expanded="false"\]\s*\{[\s\S]*width:\s*150px;[\s\S]*max-height:\s*44px;/);
   assert.match(css, /\.zhihu-smoother-page-widget\[data-expanded="true"\]\s*\{[\s\S]*max-height:\s*calc\(100vh\s*-\s*var\(--zhihu-smoother-bottom,\s*18px\)\s*-\s*12px\);/);
-  assert.match(css, /\.zhihu-smoother-page-widget\[data-expanded="true"\]\s*\.zhihu-smoother-widget__details\s*\{[\s\S]*max-height:\s*calc\(100vh\s*-\s*var\(--zhihu-smoother-bottom,\s*18px\)\s*-\s*60px\);[\s\S]*overflow-y:\s*auto;/);
+  assert.match(css, /\.zhihu-smoother-widget__details\s*\{[^}]*max-height:\s*calc\(100vh\s*-\s*var\(--zhihu-smoother-bottom,\s*18px\)\s*-\s*60px\);[^}]*overflow-y:\s*auto;/);
   assert.match(css, /\.zhihu-smoother-widget__details\s*\{[^}]*box-sizing:\s*border-box;/);
-  assert.match(css, /\.zhihu-smoother-page-widget\[data-expanded="true"\]\s*\.zhihu-smoother-widget__details\s*\{[^}]*overscroll-behavior:\s*contain;/);
-  assert.match(css, /\.zhihu-smoother-widget__details\s*\{[\s\S]*display:\s*none;/);
+  assert.match(css, /\.zhihu-smoother-widget__details\s*\{[^}]*overscroll-behavior:\s*contain;/);
+  // The details panel stays in the layout (display: block, never none) so the
+  // root's clipping can animate it; visibility keeps it paintable through the
+  // collapse (visible -> hidden flips only at the end) and drops it from the
+  // accessibility tree once the box has settled.
+  assert.match(css, /\.zhihu-smoother-widget__details\s*\{[^}]*display:\s*block;/);
+  assert.match(css, /\.zhihu-smoother-widget__details\s*\{[^}]*visibility:\s*hidden;/);
+  assert.match(css, /\.zhihu-smoother-widget__details\s*\{[^}]*transition:\s*visibility 160ms ease;/);
+  // reduced-motion silences every widget transition, including the details
+  // visibility fade, so a collapse is instant instead of root-jump + 160ms fade.
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.zhihu-smoother-widget__details\s*\{[^}]*transition:\s*none;/);
+  assert.match(css, /\.zhihu-smoother-page-widget\[data-expanded="true"\]\s*\.zhihu-smoother-widget__details\s*\{[^}]*visibility:\s*visible;/);
   assert.match(css, /\.zhihu-smoother-page-widget\s*\{[\s\S]*pointer-events:\s*auto;/);
   // The chevron points up while collapsed and flips down once expanded; lock
   // both rotation directions so the visual contract survives refactors.
