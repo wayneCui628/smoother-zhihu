@@ -3,6 +3,7 @@
   --bg: #ffffff;
   --card-border: #ebebeb;
   --blue: #0084ff;
+  --blue-text: #0084ff;
   --blue-deep: #0071e3;
   --blue-active: #0064d1;
   --blue-selected: #f0f8ff;
@@ -190,7 +191,7 @@ h2 {
 }
 
 .value-mark {
-  color: var(--blue);
+  color: var(--blue-text);
   flex: 0 0 auto;
   font-size: 11px;
   font-weight: 600;
@@ -251,11 +252,11 @@ h2 {
 }
 
 .buffer-option input:checked + .option-face strong {
-  color: var(--blue);
+  color: var(--blue-text);
 }
 
 .buffer-option input:checked + .option-face small {
-  color: var(--blue);
+  color: var(--blue-text);
 }
 
 .buffer-option input:focus-visible + .option-face {
@@ -411,6 +412,7 @@ h2 {
     --bg: #1e1e1e;
     --card-border: #3a3a3a;
     --blue-selected: rgba(0, 132, 255, 0.18);
+    --blue-text: #4a9eff;
     --focus-ring: 0 0 0 3px rgba(0, 132, 255, 0.45);
     --ink: #e2e2e2;
     --secondary: #9aa4bf;

@@ -52,4 +52,5 @@ test("popup css declares a light-dark color scheme with a dark palette", () => {
   assert.match(popupCss, /color-scheme:\s*light dark;/);
   assert.match(popupCss, /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{[\s\S]*?--bg:\s*#1e1e1e;/);
   assert.match(popupCss, /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{[\s\S]*?--ink:\s*#e2e2e2;/);
+  assert.match(popupCss, /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{[\s\S]*?--blue-text:\s*#4a9eff;/);
 });
